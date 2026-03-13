@@ -2,10 +2,18 @@ package com.carlosalarcongu.nextdrive.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+// Tonos "Vampíricos" (Primarios)
+val BloodRed = Color(0xFF8B0000)
+val Crimson = Color(0xFFB71C1C)
+val LightBlood = Color(0xFFE53935)
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+// Tonos "Minimalistas / Asfalto" (Fondos)
+val DeepBlack = Color(0xFF0A0A0A) // Casi negro puro
+val NightGray = Color(0xFF141414) // Fondo de la app
+val CardGray = Color(0xFF1E1E1E)  // Fondo de las tarjetas
+val OutlineGray = Color(0xFF333333) // Bordes sutiles
+
+// Tonos "DGT" (Secundarios y Textos)
+val DgtYellow = Color(0xFFFFC107) // Para destacar cosas importantes (estrellas, etc)
+val PureWhite = Color(0xFFF5F5F5)
+val TextGray = Color(0xFFA0A0A0)

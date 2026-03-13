@@ -5,7 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [Vehicle::class, Expense::class], version = 1, exportSchema = false)
+// ¡OJO! Hemos subido la version a 2
+@Database(entities = [Vehicle::class, Expense::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun nextDriveDao(): NextDriveDao
@@ -20,7 +21,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "nextdrive_local_database"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration() // ESTO ES CLAVE: Si hay cambios, borra y recrea la DB sin dar error
+                    .build()
                 INSTANCE = instance
                 instance
             }
