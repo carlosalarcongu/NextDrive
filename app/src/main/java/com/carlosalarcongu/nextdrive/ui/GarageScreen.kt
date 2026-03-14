@@ -1,107 +1,107 @@
+// GarageScreen.kt
 package com.carlosalarcongu.nextdrive.ui
 
+import android.content.Intent
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.carlosalarcongu.nextdrive.data.Vehicle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GarageScreen(
-    viewModel: NextDriveViewModel,
-    onNavigateToAddVehicle: () -> Unit,
-    onVehicleClick: (Long) -> Unit // NUEVO: Para navegar al panel
-) {
-    val vehicles by viewModel.allVehicles.collectAsState()
+fun UriImageLoader(uriString: String?, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var bitmap by remember(uriString) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Mi Garaje", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = onNavigateToAddVehicle) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir Vehículo")
+    LaunchedEffect(uriString) {
+        if (!uriString.isNullOrBlank()) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(Uri.parse(uriString))
+                    bitmap = BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+                } catch (e: Exception) { e.printStackTrace() }
             }
         }
-    ) { paddingValues ->
-        if (vehicles.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
-                Text("Tu garaje está vacío.\nPulsa el botón + para empezar.")
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(vehicles) { vehicle ->
-                    VehicleCard(
-                        vehicle = vehicle,
-                        onClick = { onVehicleClick(vehicle.id) },
-                        onFavoriteToggle = {
-                            // Invertimos el valor de isFavorite y actualizamos
-                            viewModel.updateVehicle(vehicle.copy(isFavorite = !vehicle.isFavorite))
-                        }
-                    )
-                }
-            }
-        }
+    }
+
+    if (bitmap != null) {
+        Image(bitmap = bitmap!!, contentDescription = "Foto Vehículo", modifier = modifier, contentScale = ContentScale.Crop)
+    } else {
+        Icon(Icons.Rounded.DirectionsCar, contentDescription = null, modifier = modifier.padding(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VehicleCard(vehicle: Vehicle, onClick: () -> Unit, onFavoriteToggle: () -> Unit) {
-    // Selector de iconos según el tipo de vehículo
-    val vehicleIcon: ImageVector = when (vehicle.type.uppercase()) {
-        "MOTO" -> Icons.Default.TwoWheeler
-        "SUV", "FURGO" -> Icons.Default.AirportShuttle
-        "CAMIÓN" -> Icons.Default.LocalShipping
-        "DEPORTIVO" -> Icons.Default.SportsMotorsports
-        else -> Icons.Default.DirectionsCar // Turismo por defecto
-    }
+fun GarageScreen(viewModel: NextDriveViewModel, onNavigateToAddVehicle: () -> Unit, onVehicleClick: (Long) -> Unit, onNavigateToUserGuide: () -> Unit) {
+    val vehicles by viewModel.allVehicles.collectAsState()
+    val context = LocalContext.current
 
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }, // Hace que toda la tarjeta sea pulsable
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Icono del vehículo
-            Icon(imageVector = vehicleIcon, contentDescription = "Tipo", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("MI GARAJE", fontWeight = FontWeight.Bold) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        floatingActionButton = { FloatingActionButton(onClick = onNavigateToAddVehicle, containerColor = MaterialTheme.colorScheme.primary) { Icon(Icons.Default.Add, "Añadir Vehículo") } }
+    ) { paddingValues ->
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Textos
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = "${vehicle.brand ?: ""} ${vehicle.model}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(text = "${vehicle.type} | Km: ${vehicle.currentKm ?: "0"}", style = MaterialTheme.typography.bodyMedium)
+            // LISTA DE VEHÍCULOS
+            if (vehicles.isEmpty()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text("Garaje vacío.\nPulsa + para registrar un vehículo.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(vehicles) { vehicle ->
+                        Card(modifier = Modifier.fillMaxWidth().clickable { onVehicleClick(vehicle.id) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Column {
+                                Box(modifier = Modifier.fillMaxWidth().height(160.dp).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+                                    UriImageLoader(uriString = vehicle.imageUri, modifier = Modifier.fillMaxSize())
+                                }
+                                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = "${vehicle.brand ?: ""} ${vehicle.model}".uppercase(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                        if (!vehicle.licensePlate.isNullOrBlank()) Text(text = vehicle.licensePlate, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    Text(text = "${vehicle.currentKm ?: 0} KM", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
-            // Botón de Favorito (Estrella)
-            IconButton(onClick = onFavoriteToggle) {
-                Icon(
-                    imageVector = if (vehicle.isFavorite) Icons.Default.Star else Icons.Default.StarOutline,
-                    contentDescription = "Favorito",
-                    tint = if (vehicle.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // FOOTER (Guía y Github)
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Card(modifier = Modifier.fillMaxWidth().clickable { onNavigateToUserGuide() }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                    Text(
+                        text = "Mantenimientos • Kilometraje • Recordatorios • Documentación • Estadísticas",
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        textAlign = TextAlign.Center, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/carlosalarcongu/NextDrive.git"))) }) {
+                    Text("REPOSITORIO EN GITHUB", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(modifier = Modifier.height(32.dp)) // Espacio para el FAB
             }
         }
     }

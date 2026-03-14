@@ -38,25 +38,12 @@ val carDatabaseMock = mapOf(
 
 @Composable
 fun GradientDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(2.dp)
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(Color.Transparent, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), Color.Transparent)
-                )
-            )
-    )
+    Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(brush = Brush.horizontalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), Color.Transparent))))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddVehicleScreen(
-    vehicleId: Long? = null,
-    viewModel: NextDriveViewModel,
-    onNavigateBack: () -> Unit
-) {
+fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val vehicleToEdit by if (vehicleId != null) viewModel.getVehicleById(vehicleId).collectAsState(null) else remember { mutableStateOf(null) }
     var isInitialized by remember { mutableStateOf(false) }
@@ -98,35 +85,18 @@ fun AddVehicleScreen(
     val filteredModels = availableModels.filter { it.contains(model, ignoreCase = true) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(if (vehicleId == null) "Añadir Vehículo" else "Editar Vehículo", fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }
-            )
-        }
+        topBar = { TopAppBar(title = { Text(if (vehicleId == null) "Añadir Vehículo" else "Editar Vehículo", fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }) }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            val headerIcon = if (carDatabaseMock.containsKey(brand)) Icons.Rounded.DirectionsCar else Icons.Rounded.SportsMotorsports
-            Icon(headerIcon, "", modifier = Modifier.size(100.dp), tint = MaterialTheme.colorScheme.primary)
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(if (carDatabaseMock.containsKey(brand)) Icons.Rounded.DirectionsCar else Icons.Rounded.SportsMotorsports, "", modifier = Modifier.size(100.dp), tint = MaterialTheme.colorScheme.primary)
 
             ExposedDropdownMenuBox(expanded = expandedBrand, onExpandedChange = { expandedBrand = !expandedBrand }) {
                 OutlinedTextField(
-                    value = brand,
-                    onValueChange = { brand = it; expandedBrand = true; if (!carDatabaseMock.containsKey(it)) model = "" },
-                    label = { Text("Marca") }, modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedBrand) }
+                    value = brand, onValueChange = { brand = it; expandedBrand = true; if (!carDatabaseMock.containsKey(it)) model = "" },
+                    label = { Text("Marca") }, modifier = Modifier.menuAnchor().fillMaxWidth(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedBrand) }
                 )
                 if (filteredBrands.isNotEmpty() && brand.isNotBlank()) {
-                    DropdownMenu(
-                        expanded = expandedBrand,
-                        onDismissRequest = { expandedBrand = false },
-                        modifier = Modifier.exposedDropdownSize(),
-                        properties = PopupProperties(focusable = false)
-                    ) {
+                    DropdownMenu(expanded = expandedBrand, onDismissRequest = { expandedBrand = false }, modifier = Modifier.exposedDropdownSize(), properties = PopupProperties(focusable = false)) {
                         filteredBrands.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { brand = option; expandedBrand = false }) }
                     }
                 }
@@ -135,16 +105,10 @@ fun AddVehicleScreen(
             ExposedDropdownMenuBox(expanded = expandedModel, onExpandedChange = { expandedModel = !expandedModel }) {
                 OutlinedTextField(
                     value = model, onValueChange = { model = it; expandedModel = true },
-                    label = { Text("Modelo*") }, modifier = Modifier.menuAnchor().fillMaxWidth(), isError = model.isBlank(),
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedModel) }
+                    label = { Text("Modelo*") }, modifier = Modifier.menuAnchor().fillMaxWidth(), isError = model.isBlank(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedModel) }
                 )
                 if (filteredModels.isNotEmpty() && model.isNotBlank()) {
-                    DropdownMenu(
-                        expanded = expandedModel,
-                        onDismissRequest = { expandedModel = false },
-                        modifier = Modifier.exposedDropdownSize(),
-                        properties = PopupProperties(focusable = false)
-                    ) {
+                    DropdownMenu(expanded = expandedModel, onDismissRequest = { expandedModel = false }, modifier = Modifier.exposedDropdownSize(), properties = PopupProperties(focusable = false)) {
                         filteredModels.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { model = option; expandedModel = false }) }
                     }
                 }
@@ -152,24 +116,12 @@ fun AddVehicleScreen(
 
             GradientDivider()
 
-            OutlinedTextField(
-                value = licensePlate, onValueChange = { licensePlate = it }, label = { Text("Matrícula") },
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters), modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = vin, onValueChange = { vin = it }, label = { Text("Bastidor") },
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters), modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = year, onValueChange = { year = it }, label = { Text("Año") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()
-            )
+            OutlinedTextField(value = licensePlate, onValueChange = { licensePlate = it }, label = { Text("Matrícula") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = vin, onValueChange = { vin = it }, label = { Text("Bastidor") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("Año") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
 
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = currentKm, onValueChange = { currentKm = it }, label = { Text("Kilómetros") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f)
-                )
+                OutlinedTextField(value = currentKm, onValueChange = { currentKm = it }, label = { Text("Kilómetros") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     IconButton(onClick = { currentKm = ((currentKm.toIntOrNull() ?: 0) + 25000).toString() }) { Icon(Icons.Default.Add, "") }
@@ -190,10 +142,7 @@ fun AddVehicleScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = isSecondHand, onCheckedChange = { isSecondHand = it }); Text("2ª Mano") }
             }
 
-            OutlinedTextField(
-                value = acquisitionCost, onValueChange = { acquisitionCost = it }, label = { Text("Coste (€)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth()
-            )
+            OutlinedTextField(value = acquisitionCost, onValueChange = { acquisitionCost = it }, label = { Text("Coste (€)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -201,19 +150,11 @@ fun AddVehicleScreen(
                 onClick = {
                     if (model.isNotBlank()) {
                         val savedVehicle = Vehicle(
-                            id = vehicleId ?: 0,
-                            brand = brand.takeIf { it.isNotBlank() },
-                            model = model,
-                            year = year.toIntOrNull(),
-                            currentKm = currentKm.toIntOrNull(),
-                            fuelType = fuelType,
-                            acquisitionCost = acquisitionCost.toDoubleOrNull(),
-                            isDailyUse = isDailyUse,
-                            isSecondHand = isSecondHand,
-                            licensePlate = licensePlate.uppercase().takeIf { it.isNotBlank() },
-                            vin = vin.uppercase().takeIf { it.isNotBlank() }
+                            id = vehicleId ?: 0, brand = brand.takeIf { it.isNotBlank() }, model = model, year = year.toIntOrNull(), currentKm = currentKm.toIntOrNull(),
+                            fuelType = fuelType, acquisitionCost = acquisitionCost.toDoubleOrNull(), isDailyUse = isDailyUse, isSecondHand = isSecondHand,
+                            licensePlate = licensePlate.uppercase().takeIf { it.isNotBlank() }, vin = vin.uppercase().takeIf { it.isNotBlank() }
                         )
-                        viewModel.addVehicle(savedVehicle)
+                        if (vehicleId == null) viewModel.addVehicle(savedVehicle) else viewModel.updateVehicle(savedVehicle)
                         Toast.makeText(context, "Guardado", Toast.LENGTH_SHORT).show()
                         onNavigateBack()
                     } else {
@@ -225,13 +166,7 @@ fun AddVehicleScreen(
         }
 
         if (showCustomFuelDialog) {
-            AlertDialog(
-                onDismissRequest = { showCustomFuelDialog = false },
-                title = { Text("Combustible") },
-                text = { OutlinedTextField(value = customFuelText, onValueChange = { customFuelText = it }, singleLine = true) },
-                confirmButton = { TextButton(onClick = { if (customFuelText.isNotBlank()) fuelType = customFuelText; showCustomFuelDialog = false }) { Text("Aceptar") } },
-                dismissButton = { TextButton(onClick = { showCustomFuelDialog = false }) { Text("Cancelar") } }
-            )
+            AlertDialog(onDismissRequest = { showCustomFuelDialog = false }, title = { Text("Combustible") }, text = { OutlinedTextField(value = customFuelText, onValueChange = { customFuelText = it }, singleLine = true) }, confirmButton = { TextButton(onClick = { if (customFuelText.isNotBlank()) fuelType = customFuelText; showCustomFuelDialog = false }) { Text("Aceptar") } }, dismissButton = { TextButton(onClick = { showCustomFuelDialog = false }) { Text("Cancelar") } })
         }
     }
 }

@@ -1,3 +1,4 @@
+// AppDatabase.kt
 package com.carlosalarcongu.nextdrive.data
 
 import android.content.Context
@@ -5,8 +6,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-// ¡OJO! Hemos subido la version a 2
-@Database(entities = [Vehicle::class, Expense::class], version = 4, exportSchema = false)
+// VERSIÓN 7 - Aplicará DestructiveMigration automáticamente para acomodar iconName si no quieres lidiar con versiones manuales.
+@Database(entities = [Vehicle::class, Expense::class, Document::class], version = 7, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun nextDriveDao(): NextDriveDao
@@ -22,7 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "nextdrive_local_database"
                 )
-                    .fallbackToDestructiveMigration() // ESTO ES CLAVE: Si hay cambios, borra y recrea la DB sin dar error
+                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance
