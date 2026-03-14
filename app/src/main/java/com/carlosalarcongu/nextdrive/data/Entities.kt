@@ -1,12 +1,8 @@
-// Entities.kt
 package com.carlosalarcongu.nextdrive.data
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.ui.graphics.vector.ImageVector
 
 @Entity(tableName = "vehicles")
 data class Vehicle(
@@ -23,7 +19,10 @@ data class Vehicle(
     val isFavorite: Boolean = false,
     val licensePlate: String? = null,
     val vin: String? = null,
-    val imageUri: String? = null
+    val imageUri: String? = null,
+    val nickname: String? = null,
+    val engineName: String? = null,
+    val horsepower: Int? = null
 )
 
 @Entity(
@@ -46,7 +45,7 @@ data class Expense(
     val reminderDateMillis: Long? = null,
     val reminderTimePeriod: Int? = null,
     val reminderTimeUnit: String? = null,
-    val iconName: String = "Herramientas" // ¡NUEVO! Icono personalizado
+    val iconName: String = "Herramientas"
 )
 
 @Entity(
@@ -59,18 +58,4 @@ data class Document(
     val name: String,
     val uriString: String,
     val mimeType: String
-)
-
-// Mapa global de iconos para gastos
-val ExpenseIconMap = mapOf(
-    "Herramientas" to Icons.Default.Build,
-    "Gasolinera" to Icons.Default.LocalGasStation,
-    "Líquidos" to Icons.Default.Opacity,
-    "Reparación" to Icons.Default.CarRepair,
-    "Neumáticos" to Icons.Default.TireRepair,
-    "Batería/Electricidad" to Icons.Default.ElectricalServices,
-    "Lavado" to Icons.Default.LocalCarWash,
-    "Multa/Tasas" to Icons.Default.AttachMoney,
-    "Aparcamiento" to Icons.Default.LocalParking,
-    "Otros" to Icons.Default.MoreHoriz
 )

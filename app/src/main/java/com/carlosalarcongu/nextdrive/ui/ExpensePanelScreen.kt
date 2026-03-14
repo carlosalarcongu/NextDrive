@@ -20,7 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlosalarcongu.nextdrive.data.Expense
-import com.carlosalarcongu.nextdrive.data.ExpenseIconMap
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

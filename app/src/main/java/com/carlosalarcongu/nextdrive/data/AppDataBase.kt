@@ -1,13 +1,19 @@
-// AppDatabase.kt
 package com.carlosalarcongu.nextdrive.data
 
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
-// VERSIÓN 7 - Aplicará DestructiveMigration automáticamente para acomodar iconName si no quieres lidiar con versiones manuales.
-@Database(entities = [Vehicle::class, Expense::class, Document::class], version = 7, exportSchema = false)
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Solo subimos versión para el import/export
+    }
+}
+
+@Database(entities = [Vehicle::class, Expense::class, Document::class], version = 8, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun nextDriveDao(): NextDriveDao
@@ -23,6 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "nextdrive_local_database"
                 )
+                    .addMigrations(MIGRATION_7_8)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

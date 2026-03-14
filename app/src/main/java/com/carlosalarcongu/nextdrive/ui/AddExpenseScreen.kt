@@ -24,12 +24,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.carlosalarcongu.nextdrive.data.Expense
-import com.carlosalarcongu.nextdrive.data.ExpenseIconMap
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+
 
 fun generateIcs(title: String, desc: String, dateMillis: Long): String {
     val format = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US)

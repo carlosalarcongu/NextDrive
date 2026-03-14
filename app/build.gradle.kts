@@ -62,4 +62,5 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
     ksp("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
     implementation("androidx.compose.material:material-icons-extended:1.7.0")
+    implementation("com.google.code.gson:gson:2.10.1")
 }

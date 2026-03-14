@@ -1,4 +1,3 @@
-// MainActivity.kt
 package com.carlosalarcongu.nextdrive
 
 import android.os.Bundle
@@ -36,7 +35,9 @@ class MainActivity : ComponentActivity() {
         val viewModel: NextDriveViewModel by viewModels { NextDriveViewModelFactory(database.nextDriveDao()) }
 
         setContent {
-            NextDriveTheme {
+            var isDarkTheme by remember { mutableStateOf(true) } // Estado del Tema
+
+            NextDriveTheme(darkTheme = isDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     var backStack by remember { mutableStateOf(listOf<AppScreen>(AppScreen.Garage)) }
                     val currentScreen = backStack.last()
@@ -49,39 +50,29 @@ class MainActivity : ComponentActivity() {
                     when (val screen = currentScreen) {
                         is AppScreen.Garage -> GarageScreen(
                             viewModel = viewModel,
+                            isDarkTheme = isDarkTheme,
+                            onThemeToggle = { isDarkTheme = !isDarkTheme },
                             onNavigateToAddVehicle = { navigateTo(AppScreen.AddEditVehicle()) },
                             onVehicleClick = { vehicleId -> navigateTo(AppScreen.Dashboard(vehicleId)) },
                             onNavigateToUserGuide = { navigateTo(AppScreen.UserGuide) }
                         )
                         is AppScreen.UserGuide -> UserGuideScreen(onNavigateBack = navigateBack)
-                        is AppScreen.AddEditVehicle -> AddVehicleScreen(
-                            vehicleId = screen.vehicleId, viewModel = viewModel,
-                            onNavigateBack = navigateBack
-                        )
+                        is AppScreen.AddEditVehicle -> AddVehicleScreen(vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack)
                         is AppScreen.Dashboard -> VehicleDashboardScreen(
-                            vehicleId = screen.vehicleId, viewModel = viewModel,
-                            onNavigateBack = navigateBack,
+                            vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack,
                             onNavigateToExpenses = { vId -> navigateTo(AppScreen.ExpensePanel(vId)) },
                             onNavigateToEdit = { vId -> navigateTo(AppScreen.AddEditVehicle(vId)) },
                             onNavigateToDocuments = { vId -> navigateTo(AppScreen.DocumentPanel(vId)) },
                             onNavigateToGraphs = { vId -> navigateTo(AppScreen.StatisticsPanel(vId)) }
                         )
                         is AppScreen.ExpensePanel -> ExpensePanelScreen(
-                            vehicleId = screen.vehicleId, viewModel = viewModel,
-                            onNavigateBack = navigateBack,
+                            vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack,
                             onNavigateToAddExpense = { vId -> navigateTo(AppScreen.AddEditExpense(vId)) },
                             onNavigateToEditExpense = { vId, eId -> navigateTo(AppScreen.AddEditExpense(vId, eId)) }
                         )
-                        is AppScreen.AddEditExpense -> AddExpenseScreen(
-                            vehicleId = screen.vehicleId, expenseId = screen.expenseId,
-                            viewModel = viewModel, onNavigateBack = navigateBack
-                        )
-                        is AppScreen.DocumentPanel -> DocumentPanelScreen(
-                            vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack
-                        )
-                        is AppScreen.StatisticsPanel -> StatisticsPanelScreen(
-                            vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack
-                        )
+                        is AppScreen.AddEditExpense -> AddExpenseScreen(vehicleId = screen.vehicleId, expenseId = screen.expenseId, viewModel = viewModel, onNavigateBack = navigateBack)
+                        is AppScreen.DocumentPanel -> DocumentPanelScreen(vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack)
+                        is AppScreen.StatisticsPanel -> StatisticsPanelScreen(vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack)
                     }
                 }
             }

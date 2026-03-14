@@ -2,6 +2,7 @@
 package com.carlosalarcongu.nextdrive.ui
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -35,6 +36,7 @@ fun VehicleDashboardScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNav
 
     val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
+            // Guardamos permiso persistente para poder leer la foto tras reiniciar la app
             context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             viewModel.updateVehicle(vehicle!!.copy(imageUri = it.toString()))
         }
@@ -46,14 +48,21 @@ fun VehicleDashboardScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNav
         topBar = { TopAppBar(title = { Text(vehicle?.model?.uppercase() ?: "") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }, actions = { IconButton(onClick = { onNavigateToEdit(vehicleId) }) { Icon(Icons.Default.Edit, "") } }) }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
             Box(modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-                UriImageLoader(uriString = vehicle?.imageUri, modifier = Modifier.fillMaxSize())
-                FilledIconButton(onClick = { photoLauncher.launch(arrayOf("image/*")) }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)) { Icon(Icons.Default.PhotoCamera, "") }
+                // ¡AQUÍ ESTÁ LA SOLUCIÓN! Usamos el VehicleImageLoader que creamos en GarageScreen.kt
+                VehicleImageLoader(vehicle = vehicle!!, modifier = Modifier.fillMaxSize())
+
+                FilledIconButton(onClick = { photoLauncher.launch(arrayOf("image/*")) }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                    Icon(Icons.Default.PhotoCamera, "Cambiar Foto")
+                }
             }
 
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("${vehicle?.brand ?: ""} ${vehicle?.model}".uppercase(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    val displayName = vehicle?.nickname?.takeIf { it.isNotBlank() } ?: "${vehicle?.brand ?: ""} ${vehicle?.model}"
+                    Text(displayName.uppercase(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
                     Spacer(modifier = Modifier.height(8.dp))
                     if (!vehicle?.licensePlate.isNullOrBlank()) Text("MATRÍCULA: ${vehicle?.licensePlate}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                     if (!vehicle?.vin.isNullOrBlank()) Text("BASTIDOR: ${vehicle?.vin}", style = MaterialTheme.typography.bodyMedium)
@@ -83,7 +92,7 @@ fun VehicleDashboardScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNav
         if (showAddKmDialog) {
             AlertDialog(
                 onDismissRequest = { showAddKmDialog = false; addKmText = "" }, title = { Text("AÑADIR KILÓMETROS") },
-                text = { OutlinedTextField(value = addKmText, onValueChange = { addKmText = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), label = { Text("Km a sumar") }, singleLine = true) },
+                text = { OutlinedTextField(value = addKmText, onValueChange = { addKmText = it.filter { char -> char.isDigit() } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), label = { Text("Km a sumar") }, singleLine = true) },
                 confirmButton = { Button(onClick = { val km = addKmText.toIntOrNull() ?: 0; if(km > 0) { viewModel.updateVehicle(vehicle!!.copy(currentKm = (vehicle!!.currentKm ?: 0) + km)) }; showAddKmDialog = false; addKmText = "" }) { Text("SUMAR") } },
                 dismissButton = { TextButton(onClick = { showAddKmDialog = false; addKmText = "" }) { Text("CANCELAR") } }
             )
@@ -95,16 +104,11 @@ fun VehicleDashboardScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNav
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardAccessCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), onClick = onClick, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = "", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+            Icon(icon, "", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.width(16.dp))
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
