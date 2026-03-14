@@ -1,13 +1,13 @@
 plugins {
     alias(libs.plugins.android.application)
+    // Removed alias(libs.plugins.kotlin.android) as it conflicts with AGP 9.0 built-in Kotlin
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.carlosalarcongu.nextdrive"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.carlosalarcongu.nextdrive"
@@ -53,4 +53,13 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    val room_version = "2.6.1"
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")
+    ksp("androidx.room:room-compiler:$room_version")
+
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
+    ksp("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
+    implementation("androidx.compose.material:material-icons-extended:1.7.0")
 }
