@@ -29,12 +29,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-fun generateIcs(title: String, desc: String, dateMillis: Long): String {
-    val format = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US)
-    format.timeZone = TimeZone.getTimeZone("UTC")
-    val dateStr = format.format(Date(dateMillis))
-    return "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//NextDrive//ES\nBEGIN:VEVENT\nDTSTART:$dateStr\nDTEND:$dateStr\nSUMMARY:$title\nDESCRIPTION:$desc\nEND:VEVENT\nEND:VCALENDAR"
-}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.carlosalarcongu.nextdrive.data.DocumentFolder
 
 // Clase auxiliar para agrupar todo el backup
 data class DatabaseBackup(
@@ -83,6 +84,11 @@ class NextDriveViewModel(private val dao: NextDriveDao) : ViewModel() {
             }
         }
     }
+
+    fun updateDocument(document: Document) = viewModelScope.launch(Dispatchers.IO) { dao.updateDocument(document) }
+    fun addFolder(folder: DocumentFolder) = viewModelScope.launch(Dispatchers.IO) { dao.insertFolder(folder) }
+    fun deleteFolder(folder: DocumentFolder) = viewModelScope.launch(Dispatchers.IO) { dao.deleteFolder(folder) }
+    fun getFoldersForVehicle(vehicleId: Long): Flow<List<DocumentFolder>> = dao.getFoldersForVehicle(vehicleId)
 }
 
 class NextDriveViewModelFactory(private val dao: NextDriveDao) : ViewModelProvider.Factory {

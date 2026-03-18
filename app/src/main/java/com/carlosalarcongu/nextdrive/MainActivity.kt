@@ -21,12 +21,17 @@ import com.carlosalarcongu.nextdrive.ui.theme.NextDriveTheme
 
 sealed class AppScreen {
     object Garage : AppScreen()
-    object Settings : AppScreen() // ¡NUEVA PANTALLA PRINCIPAL!
+    object Settings : AppScreen()
     object UserGuide : AppScreen()
     data class AddEditVehicle(val vehicleId: Long? = null) : AppScreen()
     data class Dashboard(val vehicleId: Long) : AppScreen()
     data class ExpensePanel(val vehicleId: Long) : AppScreen()
     data class AddEditExpense(val vehicleId: Long, val expenseId: Long? = null, val defaultCategory: String = "Pieza") : AppScreen()
+    data class AddPieza(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
+    data class AddRepostaje(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
+    data class AddMantenimiento(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
+    data class AddAveria(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
+    data class AddTramite(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
     data class DocumentPanel(val vehicleId: Long) : AppScreen()
     data class StatisticsPanel(val vehicleId: Long) : AppScreen()
 }
@@ -37,7 +42,6 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(this)
         val viewModel: NextDriveViewModel by viewModels { NextDriveViewModelFactory(database.nextDriveDao()) }
 
-        // Memoria del teléfono para guardar el tema
         val sharedPrefs = getSharedPreferences("NextDrivePrefs", Context.MODE_PRIVATE)
 
         setContent {
@@ -54,7 +58,6 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        // Solo mostramos la barra inferior en las pestañas principales
                         if (currentScreen is AppScreen.Garage || currentScreen is AppScreen.Settings) {
                             NavigationBar {
                                 NavigationBarItem(
@@ -73,7 +76,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { innerPadding ->
-                    // El Box ajusta el padding de la barra inferior
                     Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                         when (val screen = currentScreen) {
                             is AppScreen.Garage -> GarageScreen(
@@ -101,12 +103,31 @@ class MainActivity : ComponentActivity() {
                             )
                             is AppScreen.ExpensePanel -> ExpensePanelScreen(
                                 vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack,
-                                onNavigateToAddExpense = { vId, cat -> navigateTo(AppScreen.AddEditExpense(vId, null, cat)) },
-                                onNavigateToEditExpense = { vId, eId -> navigateTo(AppScreen.AddEditExpense(vId, eId)) }
+                                onNavigateToAdd = { vId, cat ->
+                                    when(cat) {
+                                        "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId))
+                                        "Mantenimiento" -> navigateTo(AppScreen.AddMantenimiento(vId))
+                                        "Avería" -> navigateTo(AppScreen.AddAveria(vId))
+                                        "Trámites" -> navigateTo(AppScreen.AddTramite(vId))
+                                        else -> navigateTo(AppScreen.AddPieza(vId))
+                                    }
+                                },
+                                onNavigateToEdit = { vId, cat, eId ->
+                                    when(cat) {
+                                        "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId, eId))
+                                        "Mantenimiento" -> navigateTo(AppScreen.AddMantenimiento(vId, eId))
+                                        "Avería" -> navigateTo(AppScreen.AddAveria(vId, eId))
+                                        "Trámites" -> navigateTo(AppScreen.AddTramite(vId, eId))
+                                        else -> navigateTo(AppScreen.AddPieza(vId, eId))
+                                    }
+                                }
                             )
-                            is AppScreen.AddEditExpense -> AddExpenseScreen(
-                                vehicleId = screen.vehicleId, expenseId = screen.expenseId, defaultCategory = screen.defaultCategory, viewModel = viewModel, onNavigateBack = navigateBack
-                            )
+                            is AppScreen.AddEditExpense -> AddExpenseScreen(vehicleId = screen.vehicleId, expenseId = screen.expenseId, defaultCategory = screen.defaultCategory, viewModel = viewModel, onNavigateBack = navigateBack)
+                            is AppScreen.AddPieza -> AddPiezaScreen(screen.vehicleId, screen.expenseId, viewModel, navigateBack)
+                            is AppScreen.AddRepostaje -> AddRepostajeScreen(screen.vehicleId, screen.expenseId, viewModel, navigateBack)
+                            is AppScreen.AddMantenimiento -> AddMantenimientoScreen(screen.vehicleId, screen.expenseId, "Mantenimiento", viewModel, navigateBack)
+                            is AppScreen.AddAveria -> AddMantenimientoScreen(screen.vehicleId, screen.expenseId, "Avería", viewModel, navigateBack)
+                            is AppScreen.AddTramite -> AddTramiteScreen(screen.vehicleId, screen.expenseId, viewModel, navigateBack)
                             is AppScreen.DocumentPanel -> DocumentPanelScreen(vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack)
                             is AppScreen.StatisticsPanel -> StatisticsPanelScreen(vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack)
                         }

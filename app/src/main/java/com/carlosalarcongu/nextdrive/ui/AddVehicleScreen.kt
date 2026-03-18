@@ -87,10 +87,6 @@ val vehicleColors = listOf(
     "#FFFFFF"  // White
 )
 
-@Composable
-fun GradientDivider() {
-    Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(brush = Brush.horizontalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), Color.Transparent))))
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
