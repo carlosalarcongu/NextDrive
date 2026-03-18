@@ -1,6 +1,7 @@
 package com.carlosalarcongu.nextdrive.ui.theme
 
 import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -28,7 +29,13 @@ private val LightDgtColorScheme = lightColorScheme(
 )
 
 @Composable
-fun NextDriveTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
+fun NextDriveTheme(themeMode: String = "SYSTEM", content: @Composable () -> Unit) {
+    val darkTheme = when (themeMode) {
+        "DARK" -> true
+        "LIGHT" -> false
+        else -> isSystemInDarkTheme()
+    }
+
     val colorScheme = if (darkTheme) VampiricDgtColorScheme else LightDgtColorScheme
     val view = LocalView.current
     if (!view.isInEditMode) {

@@ -7,13 +7,15 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-val MIGRATION_7_8 = object : Migration(7, 8) {
+val MIGRATION_7_8 = object : Migration(7, 8) { override fun migrate(db: SupportSQLiteDatabase) {} }
+
+val MIGRATION_8_9 = object : Migration(8, 9) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        // Solo subimos versión para el import/export
+        db.execSQL("ALTER TABLE vehicles ADD COLUMN colorHex TEXT")
     }
 }
 
-@Database(entities = [Vehicle::class, Expense::class, Document::class], version = 8, exportSchema = false)
+@Database(entities = [Vehicle::class, Expense::class, Document::class], version = 9, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun nextDriveDao(): NextDriveDao
@@ -29,7 +31,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "nextdrive_local_database"
                 )
-                    .addMigrations(MIGRATION_7_8)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9) // Migración segura
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

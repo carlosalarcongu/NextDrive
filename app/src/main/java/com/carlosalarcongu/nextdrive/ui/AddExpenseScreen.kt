@@ -1,4 +1,3 @@
-// AddExpenseScreen.kt
 package com.carlosalarcongu.nextdrive.ui
 
 import android.content.Intent
@@ -30,7 +29,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-
 fun generateIcs(title: String, desc: String, dateMillis: Long): String {
     val format = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US)
     format.timeZone = TimeZone.getTimeZone("UTC")
@@ -40,7 +38,7 @@ fun generateIcs(title: String, desc: String, dateMillis: Long): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddExpenseScreen(vehicleId: Long, expenseId: Long? = null, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit) {
+fun AddExpenseScreen(vehicleId: Long, expenseId: Long? = null, defaultCategory: String, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val historyExpenses by viewModel.getUniqueExpensesHistory().collectAsState(emptyList())
     val expenseToEdit by if (expenseId != null) viewModel.getExpenseById(expenseId).collectAsState(null) else remember { mutableStateOf(null) }
@@ -51,10 +49,10 @@ fun AddExpenseScreen(vehicleId: Long, expenseId: Long? = null, viewModel: NextDr
     var cost by remember { mutableStateOf("") }
     var groupName by remember { mutableStateOf("") }
     var comment by remember { mutableStateOf("") }
-    var selectedIcon by remember { mutableStateOf("Herramientas") }
+    var selectedIcon by remember { mutableStateOf(if (defaultCategory == "Repostaje") "Gasolinera" else "Herramientas") }
 
     val categories = listOf("Pieza", "Consumible", "Repostaje")
-    var selectedCategory by remember { mutableStateOf(categories[0]) }
+    var selectedCategory by remember { mutableStateOf(defaultCategory) }
 
     var hasReminder by remember { mutableStateOf(false) }
     var notifyChecked by remember { mutableStateOf(true) }
@@ -137,8 +135,7 @@ fun AddExpenseScreen(vehicleId: Long, expenseId: Long? = null, viewModel: NextDr
             OutlinedTextField(value = groupName, onValueChange = { groupName = it }, label = { Text("Grupo (Ej: Suspensión)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = comment, onValueChange = { comment = it }, label = { Text("Observaciones") }, modifier = Modifier.fillMaxWidth().height(100.dp), maxLines = 4)
 
-            GradientDivider()
-
+            // ... [Resto del código idéntico al anterior] ...
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text("¿RECORDATORIO?", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
                 Switch(checked = hasReminder, onCheckedChange = { hasReminder = it })

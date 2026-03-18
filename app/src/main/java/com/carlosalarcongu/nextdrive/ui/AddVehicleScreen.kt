@@ -2,14 +2,17 @@ package com.carlosalarcongu.nextdrive.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.SportsMotorsports
@@ -17,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +74,19 @@ val carDatabaseMock = mapOf(
     "Volkswagen" to listOf("Arteon", "Golf", "ID.3", "ID.4", "ID.5", "ID.7", "Passat", "Polo", "T-Cross", "T-Roc", "Tiguan", "Touareg", "Touran"),
     "Volvo" to listOf("C40", "EX30", "EX90", "S60", "S90", "V60", "V90", "XC40", "XC60", "XC90")
 )
+
+val vehicleColors = listOf(
+    "#F5F5F5", // PureWhite
+    "#0A0A0A", // DeepBlack
+    "#8B0000", // BloodRed
+    "#B71C1C", // Crimson
+    "#FFC107", // DgtYellow
+    "#1976D2", // Blue
+    "#388E3C", // Green
+    "#808080", // Gray
+    "#FFFFFF"  // White
+)
+
 @Composable
 fun GradientDivider() {
     Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(brush = Brush.horizontalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), Color.Transparent))))
@@ -100,6 +117,7 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
     var customFuelText by remember { mutableStateOf("") }
     var isDailyUse by remember { mutableStateOf(true) }
     var isSecondHand by remember { mutableStateOf(true) }
+    var selectedColorHex by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(vehicleToEdit) {
         if (vehicleToEdit != null && !isInitialized) {
@@ -116,6 +134,7 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
             acquisitionCost = vehicleToEdit!!.acquisitionCost?.toString() ?: ""
             isDailyUse = vehicleToEdit!!.isDailyUse
             isSecondHand = vehicleToEdit!!.isSecondHand
+            selectedColorHex = vehicleToEdit!!.colorHex
             isInitialized = true
         }
     }
@@ -128,6 +147,16 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
         topBar = { TopAppBar(title = { Text(if (vehicleId == null) "AÑADIR VEHÍCULO" else "EDITAR VEHÍCULO", fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }) }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+
+            // SELECTOR DE COLOR
+            Text("Color del Vehículo:", style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.Start))
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                vehicleColors.forEach { hex ->
+                    Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(hex))).clickable { selectedColorHex = hex }, contentAlignment = Alignment.Center) {
+                        if (selectedColorHex == hex) Icon(Icons.Default.Check, contentDescription = "Elegido", tint = if (hex == "#F5F5F5") Color.Black else Color.White)
+                    }
+                }
+            }
 
             OutlinedTextField(value = nickname, onValueChange = { nickname = it }, label = { Text("Apodo del vehículo (Opcional)") }, modifier = Modifier.fillMaxWidth())
 
@@ -156,56 +185,141 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
 
             GradientDivider()
 
-            OutlinedTextField(value = licensePlate, onValueChange = { licensePlate = it.filter { char -> char.isLetterOrDigit() }.uppercase() }, label = { Text("Matrícula") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters), modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = vin, onValueChange = { vin = it.filter { char -> char.isLetterOrDigit() }.uppercase() }, label = { Text("Bastidor") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters), modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = year, onValueChange = { year = it.filter { char -> char.isDigit() } }, label = { Text("Año") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = licensePlate,
+                onValueChange = { licensePlate = it.uppercase() },
+                label = { Text("Matrícula") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
+            )
 
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = currentKm, onValueChange = { currentKm = it.filter { char -> char.isDigit() } }, label = { Text("Kilómetros") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                    IconButton(onClick = { currentKm = ((currentKm.toIntOrNull() ?: 0) + 25000).toString() }) { Icon(Icons.Default.Add, "") }
-                    IconButton(onClick = { currentKm = maxOf(0, (currentKm.toIntOrNull() ?: 0) - 25000).toString() }) { Icon(Icons.Default.Remove, "") }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = year,
+                    onValueChange = { year = it.filter { char -> char.isDigit() }.take(4) },
+                    label = { Text("Año") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = currentKm,
+                    onValueChange = { currentKm = it.filter { char -> char.isDigit() } },
+                    label = { Text("KM Actuales") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            OutlinedTextField(
+                value = vin,
+                onValueChange = { vin = it.uppercase().take(17) },
+                label = { Text("VIN (Número de bastidor)") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
+            )
+
+            OutlinedTextField(
+                value = acquisitionCost,
+                onValueChange = { acquisitionCost = it.filter { char -> char.isDigit() || char == '.' } },
+                label = { Text("Coste de Adquisición (€)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text("Tipo de Combustible:", style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.Start))
+            val fuels = listOf("Gasolina", "Diésel", "Híbrido", "Eléctrico", "GLP", "Otros")
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                fuels.forEach { fuel ->
+                    FilterChip(
+                        selected = fuelType == fuel || (fuel == "Otros" && !fuels.dropLast(1).contains(fuelType)),
+                        onClick = {
+                            if (fuel == "Otros") {
+                                showCustomFuelDialog = true
+                            } else {
+                                fuelType = fuel
+                            }
+                        },
+                        label = { Text(if (fuel == "Otros" && !fuels.dropLast(1).contains(fuelType)) fuelType else fuel) }
+                    )
                 }
             }
 
-            GradientDivider()
-
-            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Combustible:", fontWeight = FontWeight.Bold)
-                FilterChip(selected = fuelType == "Gasolina", onClick = { fuelType = "Gasolina" }, label = { Text("Gasolina") })
-                FilterChip(selected = fuelType == "Diésel", onClick = { fuelType = "Diésel" }, label = { Text("Diésel") })
-                FilterChip(selected = (fuelType != "Gasolina" && fuelType != "Diésel"), onClick = { showCustomFuelDialog = true }, label = { Text("Otro") })
-
-                HorizontalDivider(modifier = Modifier.height(24.dp).width(1.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = isDailyUse, onCheckedChange = { isDailyUse = it }); Text("Uso Diario") }
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = isSecondHand, onCheckedChange = { isSecondHand = it }); Text("2ª Mano") }
+            if (showCustomFuelDialog) {
+                AlertDialog(
+                    onDismissRequest = { showCustomFuelDialog = false },
+                    title = { Text("Otro Combustible") },
+                    text = {
+                        OutlinedTextField(
+                            value = customFuelText,
+                            onValueChange = { customFuelText = it },
+                            label = { Text("Especificar combustible") }
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (customFuelText.isNotBlank()) {
+                                fuelType = customFuelText
+                            }
+                            showCustomFuelDialog = false
+                        }) { Text("Aceptar") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCustomFuelDialog = false }) { Text("Cancelar") }
+                    }
+                )
             }
 
-            OutlinedTextField(value = acquisitionCost, onValueChange = { acquisitionCost = it.filter { char -> char.isDigit() || char == '.' || char == ',' } }, label = { Text("Coste (€)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = isDailyUse, onCheckedChange = { isDailyUse = it })
+                Text("Vehículo de uso diario", style = MaterialTheme.typography.bodyMedium)
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = isSecondHand, onCheckedChange = { isSecondHand = it })
+                Text("Vehículo de segunda mano", style = MaterialTheme.typography.bodyMedium)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
-                    if (model.isNotBlank()) {
-                        val savedVehicle = Vehicle(
-                            id = vehicleId ?: 0, nickname = nickname.takeIf { it.isNotBlank() }, brand = brand.takeIf { it.isNotBlank() }, model = model,
-                            engineName = engineName.takeIf { it.isNotBlank() }, horsepower = horsepower.toIntOrNull(), year = year.toIntOrNull(), currentKm = currentKm.toIntOrNull(),
-                            fuelType = fuelType, acquisitionCost = acquisitionCost.toDoubleOrNull(), isDailyUse = isDailyUse, isSecondHand = isSecondHand,
-                            licensePlate = licensePlate.takeIf { it.isNotBlank() }, vin = vin.takeIf { it.isNotBlank() }, imageUri = vehicleToEdit?.imageUri
-                        )
-                        if (vehicleId == null) viewModel.addVehicle(savedVehicle) else viewModel.updateVehicle(savedVehicle)
-                        Toast.makeText(context, "Guardado", Toast.LENGTH_SHORT).show()
-                        onNavigateBack()
-                    } else { Toast.makeText(context, "Modelo obligatorio", Toast.LENGTH_SHORT).show() }
+                    if (brand.isBlank() || model.isBlank()) {
+                        Toast.makeText(context, "Marca y Modelo son obligatorios", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    val vehicle = Vehicle(
+                        id = vehicleId ?: 0,
+                        nickname = nickname.ifBlank { null },
+                        brand = brand,
+                        model = model,
+                        engineName = engineName.ifBlank { null },
+                        horsepower = horsepower.toIntOrNull(),
+                        licensePlate = licensePlate.ifBlank { null },
+                        vin = vin.ifBlank { null },
+                        year = year.toIntOrNull(),
+                        currentKm = currentKm.toIntOrNull(),
+                        acquisitionCost = acquisitionCost.toDoubleOrNull(),
+                        fuelType = fuelType,
+                        isDailyUse = isDailyUse,
+                        isSecondHand = isSecondHand,
+                        colorHex = selectedColorHex
+                    )
+                    if (vehicleId == null) {
+                        viewModel.addVehicle(vehicle)
+                        Toast.makeText(context, "Vehículo guardado", Toast.LENGTH_SHORT).show()
+                    } else {
+                        viewModel.updateVehicle(vehicle)
+                        Toast.makeText(context, "Vehículo actualizado", Toast.LENGTH_SHORT).show()
+                    }
+                    onNavigateBack()
                 },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text(if (vehicleId == null) "GUARDAR" else "ACTUALIZAR", modifier = Modifier.padding(8.dp), fontSize = MaterialTheme.typography.titleMedium.fontSize) }
-        }
-
-        if (showCustomFuelDialog) {
-            AlertDialog(onDismissRequest = { showCustomFuelDialog = false }, title = { Text("Combustible") }, text = { OutlinedTextField(value = customFuelText, onValueChange = { customFuelText = it }, singleLine = true) }, confirmButton = { TextButton(onClick = { if (customFuelText.isNotBlank()) fuelType = customFuelText; showCustomFuelDialog = false }) { Text("Aceptar") } }, dismissButton = { TextButton(onClick = { showCustomFuelDialog = false }) { Text("Cancelar") } })
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Icon(if (vehicleId == null) Icons.Default.Add else Icons.Default.Check, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (vehicleId == null) "GUARDAR VEHÍCULO" else "ACTUALIZAR VEHÍCULO", fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

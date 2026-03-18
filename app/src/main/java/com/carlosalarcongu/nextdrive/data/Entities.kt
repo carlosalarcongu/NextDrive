@@ -22,7 +22,8 @@ data class Vehicle(
     val imageUri: String? = null,
     val nickname: String? = null,
     val engineName: String? = null,
-    val horsepower: Int? = null
+    val horsepower: Int? = null,
+    val colorHex: String? = null // ¡NUEVO! Color del vehículo en formato Hexadecimal
 )
 
 @Entity(
