@@ -26,7 +26,16 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VehicleDashboardScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit, onNavigateToExpenses: (Long) -> Unit, onNavigateToEdit: (Long) -> Unit, onNavigateToDocuments: (Long) -> Unit, onNavigateToGraphs: (Long) -> Unit) {
+fun VehicleDashboardScreen(
+    vehicleId: Long,
+    viewModel: NextDriveViewModel,
+    onNavigateBack: () -> Unit,
+    onNavigateToExpenses: (Long) -> Unit,
+    onNavigateToEdit: (Long) -> Unit,
+    onNavigateToDocuments: (Long) -> Unit,
+    onNavigateToGraphs: (Long) -> Unit,
+    onNavigateToAddRepostaje: (Long) -> Unit // ¡NUEVO PARÁMETRO!
+) {
     val vehicle by viewModel.getVehicleById(vehicleId).collectAsState(initial = null)
     val context = LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -50,7 +59,6 @@ fun VehicleDashboardScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNav
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
             Box(modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-                // ¡AQUÍ ESTÁ LA SOLUCIÓN! Usamos el VehicleImageLoader que creamos en GarageScreen.kt
                 VehicleImageLoader(vehicle = vehicle!!, modifier = Modifier.fillMaxSize())
 
                 FilledIconButton(onClick = { photoLauncher.launch(arrayOf("image/*")) }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)) {
@@ -69,8 +77,17 @@ fun VehicleDashboardScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNav
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("KM: ${vehicle?.currentKm ?: "0"} | ${vehicle?.fuelType?.uppercase() ?: "N/D"}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                        FilledTonalIconButton(onClick = { showAddKmDialog = true }) { Icon(Icons.Default.AddRoad, "Añadir Km") }
+                        Text("KM: ${vehicle?.currentKm ?: "0"} | ${vehicle?.fuelType?.uppercase() ?: "N/D"}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+
+                        // ¡AQUÍ ESTÁN LOS DOS BOTONES JUNTOS!
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilledTonalIconButton(onClick = { onNavigateToAddRepostaje(vehicleId) }) {
+                                Icon(Icons.Default.LocalGasStation, "Añadir Repostaje")
+                            }
+                            FilledTonalIconButton(onClick = { showAddKmDialog = true }) {
+                                Icon(Icons.Default.AddRoad, "Añadir Km")
+                            }
+                        }
                     }
                 }
             }

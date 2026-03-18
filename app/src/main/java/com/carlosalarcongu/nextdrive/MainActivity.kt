@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +22,7 @@ import com.carlosalarcongu.nextdrive.ui.theme.NextDriveTheme
 
 sealed class AppScreen {
     object Garage : AppScreen()
+    object FuelPrices : AppScreen() // ¡NUEVA PANTALLA PRINCIPAL!
     object Settings : AppScreen()
     object UserGuide : AppScreen()
     data class AddEditVehicle(val vehicleId: Long? = null) : AppScreen()
@@ -58,13 +60,20 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        if (currentScreen is AppScreen.Garage || currentScreen is AppScreen.Settings) {
+                        // Mostramos la barra inferior en las TRES pestañas principales
+                        if (currentScreen is AppScreen.Garage || currentScreen is AppScreen.Settings || currentScreen is AppScreen.FuelPrices) {
                             NavigationBar {
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.DirectionsCar, contentDescription = "Garaje") },
                                     label = { Text("Mi Garaje") },
                                     selected = currentScreen is AppScreen.Garage,
                                     onClick = { if (currentScreen !is AppScreen.Garage) navigateTo(AppScreen.Garage) }
+                                )
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.LocalGasStation, contentDescription = "Gasolineras") },
+                                    label = { Text("Precios") },
+                                    selected = currentScreen is AppScreen.FuelPrices,
+                                    onClick = { if (currentScreen !is AppScreen.FuelPrices) navigateTo(AppScreen.FuelPrices) }
                                 )
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.Settings, contentDescription = "Ajustes") },
@@ -84,6 +93,7 @@ class MainActivity : ComponentActivity() {
                                 onVehicleClick = { vehicleId -> navigateTo(AppScreen.Dashboard(vehicleId)) },
                                 onNavigateToUserGuide = { navigateTo(AppScreen.UserGuide) }
                             )
+                            is AppScreen.FuelPrices -> FuelPricesScreen() // ¡NUEVA RUTA!
                             is AppScreen.Settings -> SettingsScreen(
                                 viewModel = viewModel,
                                 currentTheme = themeMode,
@@ -99,7 +109,8 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToExpenses = { vId -> navigateTo(AppScreen.ExpensePanel(vId)) },
                                 onNavigateToEdit = { vId -> navigateTo(AppScreen.AddEditVehicle(vId)) },
                                 onNavigateToDocuments = { vId -> navigateTo(AppScreen.DocumentPanel(vId)) },
-                                onNavigateToGraphs = { vId -> navigateTo(AppScreen.StatisticsPanel(vId)) }
+                                onNavigateToGraphs = { vId -> navigateTo(AppScreen.StatisticsPanel(vId)) },
+                                onNavigateToAddRepostaje = { vId -> navigateTo(AppScreen.AddRepostaje(vId)) }
                             )
                             is AppScreen.ExpensePanel -> ExpensePanelScreen(
                                 vehicleId = screen.vehicleId, viewModel = viewModel, onNavigateBack = navigateBack,
