@@ -26,6 +26,8 @@ data class DatabaseBackup(
 
 class NextDriveViewModel(private val dao: NextDriveDao) : ViewModel() {
 
+    val allExpenses: StateFlow<List<Expense>> = dao.getAllExpensesSyncFlow().stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
     val allVehicles: StateFlow<List<Vehicle>> = dao.getAllVehicles()
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
 
@@ -33,6 +35,9 @@ class NextDriveViewModel(private val dao: NextDriveDao) : ViewModel() {
     fun updateVehicle(vehicle: Vehicle) = viewModelScope.launch(Dispatchers.IO) { dao.updateVehicle(vehicle) }
     fun deleteVehicle(vehicle: Vehicle) = viewModelScope.launch(Dispatchers.IO) { dao.deleteVehicle(vehicle) }
     fun getVehicleById(id: Long): Flow<Vehicle> = dao.getVehicleById(id)
+
+    fun deleteMultipleExpenses(ids: List<Long>) = viewModelScope.launch(Dispatchers.IO) { dao.deleteExpensesByIds(ids) }
+    fun deleteExpenseById(id: Long) = viewModelScope.launch(Dispatchers.IO) { dao.deleteExpensesByIds(listOf(id)) }
 
     fun addExpense(expense: Expense) = viewModelScope.launch(Dispatchers.IO) { dao.insertExpense(expense) }
     fun updateExpense(expense: Expense) = viewModelScope.launch(Dispatchers.IO) { dao.updateExpense(expense) }

@@ -9,9 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
@@ -19,16 +17,23 @@ import androidx.compose.ui.Alignment
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatisticsPanelScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit) {
-    val expenses by viewModel.getExpensesForVehicle(vehicleId).collectAsState(initial = emptyList())
+fun StatisticsPanelScreen(vehicleId: Long?, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit) {
+    // Si vehicleId es null, cogemos TODOS los gastos. Si no, solo los del coche.
+    val allExp by viewModel.allExpenses.collectAsState()
+    val specificExp by if(vehicleId != null) viewModel.getExpensesForVehicle(vehicleId).collectAsState(emptyList()) else remember { mutableStateOf(emptyList()) }
+
+    val expenses = if(vehicleId == null) allExp else specificExp
+
     val total = expenses.sumOf { it.totalCost }
     val grouped = expenses.groupBy { it.category }.mapValues { it.value.sumOf { exp -> exp.totalCost } }.toList().sortedByDescending { it.second }
 
     val viewModes = listOf("BARRAS", "CIRCULAR", "TABLA")
     var selectedMode by remember { mutableStateOf(viewModes[0]) }
-    val colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.secondary)
+    val colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.error)
 
-    Scaffold(topBar = { TopAppBar(title = { Text("ESTADÍSTICAS") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }) }) { padding ->
+    Scaffold(
+        topBar = { TopAppBar(title = { Text(if(vehicleId == null) "ESTADÍSTICAS GLOBALES" else "ESTADÍSTICAS DEL VEHÍCULO") }, navigationIcon = { if(vehicleId != null) IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }) }
+    ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("COSTE TOTAL: ${"%.2f".format(total)} €", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
@@ -38,7 +43,7 @@ fun StatisticsPanelScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNavi
 
             Card(modifier = Modifier.fillMaxWidth().height(300.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 if (total == 0.0) {
-                    Text("No hay datos", modifier = Modifier.padding(16.dp))
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No hay datos") }
                 } else {
                     when (selectedMode) {
                         "BARRAS" -> {

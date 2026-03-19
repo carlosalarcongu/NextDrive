@@ -36,4 +36,8 @@ interface NextDriveDao {
     @Query("DELETE FROM vehicles") fun deleteAllVehicles()
     @Query("DELETE FROM expenses") fun deleteAllExpenses()
     @Query("DELETE FROM documents") fun deleteAllDocuments()
+    @Query("SELECT * FROM expenses ORDER BY dateMillis DESC")
+    fun getAllExpensesSyncFlow(): Flow<List<Expense>>
+    @Query("DELETE FROM expenses WHERE id IN (:ids)")
+    fun deleteExpensesByIds(ids: List<Long>)
 }

@@ -23,11 +23,11 @@ data class Expense(
     val sharedWithXPersons: Int = 1, val hasReminder: Boolean = false, val reminderType: String? = null,
     val reminderKm: Int? = null, val reminderDateMillis: Long? = null, val reminderTimePeriod: Int? = null,
     val reminderTimeUnit: String? = null, val iconName: String = "Herramientas",
-
     val pricePerLiter: Double? = null, val liters: Double? = null,
     val laborCost: Double? = null, val partsCost: Double? = null,
     val isItemized: Boolean = false, val workshop: String? = null,
-    val attachedDocumentsUris: String? = null
+    val attachedDocumentsUris: String? = null,
+    val registeredKm: Int? = null
 )
 
 @Entity(tableName = "document_folders", foreignKeys = [ForeignKey(entity = Vehicle::class, parentColumns = ["id"], childColumns = ["vehicleId"], onDelete = ForeignKey.CASCADE)])

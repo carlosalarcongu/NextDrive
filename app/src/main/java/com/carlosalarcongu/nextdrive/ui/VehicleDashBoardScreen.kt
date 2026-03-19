@@ -1,16 +1,14 @@
-// VehicleDashboardScreen.kt
 package com.carlosalarcongu.nextdrive.ui
 
 import android.content.Intent
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -21,113 +19,203 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun VehicleDashboardScreen(
-    vehicleId: Long,
-    viewModel: NextDriveViewModel,
-    onNavigateBack: () -> Unit,
-    onNavigateToExpenses: (Long) -> Unit,
-    onNavigateToEdit: (Long) -> Unit,
-    onNavigateToDocuments: (Long) -> Unit,
-    onNavigateToGraphs: (Long) -> Unit,
-    onNavigateToAddRepostaje: (Long) -> Unit // ¡NUEVO PARÁMETRO!
+    vehicleId: Long, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit,
+    onNavigateToEdit: (Long) -> Unit, onNavigateToDocuments: (Long) -> Unit,
+    onNavigateToAdd: (Long, String) -> Unit, onNavigateToEditExpense: (Long, String, Long) -> Unit
 ) {
     val vehicle by viewModel.getVehicleById(vehicleId).collectAsState(initial = null)
+    val expenses by viewModel.getExpensesForVehicle(vehicleId).collectAsState(initial = emptyList())
     val context = LocalContext.current
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var deleteValidationText by remember { mutableStateOf("") }
-    var showAddKmDialog by remember { mutableStateOf(false) }
-    var addKmText by remember { mutableStateOf("") }
+    val haptic = LocalHapticFeedback.current
+    var isFabExpanded by remember { mutableStateOf(false) }
 
-    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let {
-            // Guardamos permiso persistente para poder leer la foto tras reiniciar la app
-            context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            viewModel.updateVehicle(vehicle!!.copy(imageUri = it.toString()))
-        }
-    }
+    // ESTADO PARA MULTISELECCIÓN
+    var selectedExpenseIds by remember { mutableStateOf(setOf<Long>()) }
 
     if (vehicle == null) return
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(vehicle?.model?.uppercase() ?: "") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }, actions = { IconButton(onClick = { onNavigateToEdit(vehicleId) }) { Icon(Icons.Default.Edit, "") } }) }
-    ) { paddingValues ->
-        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-
-            Box(modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-                VehicleImageLoader(vehicle = vehicle!!, modifier = Modifier.fillMaxSize())
-
-                FilledIconButton(onClick = { photoLauncher.launch(arrayOf("image/*")) }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                    Icon(Icons.Default.PhotoCamera, "Cambiar Foto")
-                }
+        topBar = {
+            if (selectedExpenseIds.isNotEmpty()) {
+                TopAppBar(
+                    title = { Text("${selectedExpenseIds.size} seleccionados") },
+                    navigationIcon = { IconButton(onClick = { selectedExpenseIds = emptySet() }) { Icon(Icons.Default.Close, "Cancelar") } },
+                    actions = {
+                        IconButton(onClick = {
+                            viewModel.deleteMultipleExpenses(selectedExpenseIds.toList())
+                            selectedExpenseIds = emptySet()
+                        }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(vehicle?.model?.uppercase() ?: "") },
+                    navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } },
+                    actions = { IconButton(onClick = { onNavigateToEdit(vehicleId) }) { Icon(Icons.Default.Edit, "") } }
+                )
             }
-
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    val displayName = vehicle?.nickname?.takeIf { it.isNotBlank() } ?: "${vehicle?.brand ?: ""} ${vehicle?.model}"
-                    Text(displayName.uppercase(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (!vehicle?.licensePlate.isNullOrBlank()) Text("MATRÍCULA: ${vehicle?.licensePlate}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                    if (!vehicle?.vin.isNullOrBlank()) Text("BASTIDOR: ${vehicle?.vin}", style = MaterialTheme.typography.bodyMedium)
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("KM: ${vehicle?.currentKm ?: "0"} | ${vehicle?.fuelType?.uppercase() ?: "N/D"}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-
-                        // ¡AQUÍ ESTÁN LOS DOS BOTONES JUNTOS!
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilledTonalIconButton(onClick = { onNavigateToAddRepostaje(vehicleId) }) {
-                                Icon(Icons.Default.LocalGasStation, "Añadir Repostaje")
-                            }
-                            FilledTonalIconButton(onClick = { showAddKmDialog = true }) {
-                                Icon(Icons.Default.AddRoad, "Añadir Km")
-                            }
-                        }
+        },
+        floatingActionButton = {
+            if (selectedExpenseIds.isEmpty()) {
+                Column(horizontalAlignment = Alignment.End) {
+                    if (isFabExpanded) {
+                        FabMenuItem("Trámites", Icons.Default.Assignment) { onNavigateToAdd(vehicleId, "Trámites"); isFabExpanded = false }
+                        FabMenuItem("Avería", Icons.Default.CarCrash) { onNavigateToAdd(vehicleId, "Avería"); isFabExpanded = false }
+                        FabMenuItem("Mantenimiento", Icons.Default.Handyman) { onNavigateToAdd(vehicleId, "Mantenimiento"); isFabExpanded = false }
+                        FabMenuItem("Repostaje", Icons.Default.LocalGasStation) { onNavigateToAdd(vehicleId, "Repostaje"); isFabExpanded = false }
+                        FabMenuItem("Pieza", Icons.Default.Build) { onNavigateToAdd(vehicleId, "Pieza"); isFabExpanded = false }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    FloatingActionButton(onClick = { isFabExpanded = !isFabExpanded }, containerColor = MaterialTheme.colorScheme.primary) {
+                        Icon(if (isFabExpanded) Icons.Default.Close else Icons.Default.Add, "Desplegar")
                     }
                 }
             }
+        }
+    ) { paddingValues ->
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(paddingValues), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // ... (Vehicle Card y Documentos igual que antes) ...
+            item {
+                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        val displayName = vehicle?.nickname?.takeIf { it.isNotBlank() } ?: "${vehicle?.brand ?: ""} ${vehicle?.model}"
+                        Text(displayName.uppercase(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("KM: ${vehicle?.currentKm ?: "0"} | ${vehicle?.fuelType?.uppercase() ?: "N/D"}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            item {
+                Button(onClick = { onNavigateToDocuments(vehicleId) }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
+                    Icon(Icons.Default.Folder, ""); Spacer(Modifier.width(8.dp)); Text("DOCUMENTACIÓN Y PAPELES", fontWeight = FontWeight.Bold)
+                }
+            }
 
-            Text("PANELES", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            item { Text("HISTORIAL DE GASTOS", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp)) }
 
-            DashboardAccessCard("GASTOS Y MANTENIMIENTO", Icons.Default.Receipt) { onNavigateToExpenses(vehicleId) }
-            DashboardAccessCard("DOCUMENTACIÓN", Icons.Default.Folder) { onNavigateToDocuments(vehicleId) }
-            DashboardAccessCard("ESTADÍSTICAS Y GRÁFICOS", Icons.Default.BarChart) { onNavigateToGraphs(vehicleId) }
+            items(expenses) { expense ->
+                val isSelected = selectedExpenseIds.contains(expense.id)
+                val cardColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else getCategoryColor(expense.category)
 
-            Spacer(modifier = Modifier.weight(1f))
-
-            Button(onClick = { showDeleteDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
-                Icon(Icons.Default.Delete, "", modifier = Modifier.padding(end = 8.dp))
-                Text("ELIMINAR VEHÍCULO")
+                Card(
+                    modifier = Modifier.fillMaxWidth().combinedClickable(
+                        onClick = {
+                            if (selectedExpenseIds.isNotEmpty()) {
+                                selectedExpenseIds = if (isSelected) selectedExpenseIds - expense.id else selectedExpenseIds + expense.id
+                            } else {
+                                onNavigateToEditExpense(vehicleId, expense.category, expense.id)
+                            }
+                        },
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedExpenseIds = if (isSelected) selectedExpenseIds - expense.id else selectedExpenseIds + expense.id
+                        }
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 8.dp else 2.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardColor)
+                ) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (isSelected) {
+                            Icon(Icons.Default.CheckCircle, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                        } else {
+                            val icon = ExpenseIconMap[expense.iconName] ?: Icons.Default.Build
+                            Icon(icon, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(expense.title.uppercase(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                            Text(expense.category, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("${expense.totalCost} €", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
+    }
+}
 
-        if (showAddKmDialog) {
-            AlertDialog(
-                onDismissRequest = { showAddKmDialog = false; addKmText = "" }, title = { Text("AÑADIR KILÓMETROS") },
-                text = { OutlinedTextField(value = addKmText, onValueChange = { addKmText = it.filter { char -> char.isDigit() } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), label = { Text("Km a sumar") }, singleLine = true) },
-                confirmButton = { Button(onClick = { val km = addKmText.toIntOrNull() ?: 0; if(km > 0) { viewModel.updateVehicle(vehicle!!.copy(currentKm = (vehicle!!.currentKm ?: 0) + km)) }; showAddKmDialog = false; addKmText = "" }) { Text("SUMAR") } },
-                dismissButton = { TextButton(onClick = { showAddKmDialog = false; addKmText = "" }) { Text("CANCELAR") } }
+// --- COMPONENTES VISUALES MOVIDOS DESDE EL ANTIGUO PANEL DE GASTOS ---
+
+@Composable
+fun FabMenuItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.padding(end = 12.dp),
+            shadowElevation = 2.dp
+        ) {
+            Text(
+                text = title,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
             )
         }
-
-        if (showDeleteDialog) {
-            AlertDialog(onDismissRequest = { showDeleteDialog = false; deleteValidationText = "" }, title = { Text("¿ELIMINAR?") }, text = { Column { Text("Escribe ELIMINAR para confirmar."); OutlinedTextField(value = deleteValidationText, onValueChange = { deleteValidationText = it }, singleLine = true) } }, confirmButton = { Button(onClick = { vehicle?.let { viewModel.deleteVehicle(it) }; showDeleteDialog = false; onNavigateBack() }, enabled = deleteValidationText == "ELIMINAR", colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("ELIMINAR") } }, dismissButton = { TextButton(onClick = { showDeleteDialog = false; deleteValidationText = "" }) { Text("CANCELAR") } })
+        SmallFloatingActionButton(
+            onClick = onClick,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        ) {
+            Icon(icon, contentDescription = title)
         }
     }
 }
 
 @Composable
-fun DashboardAccessCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), onClick = onClick, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+fun getCategoryColor(category: String): androidx.compose.ui.graphics.Color {
+    val baseColor = when (category) {
+        "Pieza" -> androidx.compose.ui.graphics.Color.Gray
+        "Repostaje" -> androidx.compose.ui.graphics.Color(0xFF4CAF50) // Verde
+        "Mantenimiento" -> androidx.compose.ui.graphics.Color(0xFFFF9800) // Naranja
+        "Avería" -> MaterialTheme.colorScheme.error // Rojo
+        "Trámites" -> androidx.compose.ui.graphics.Color(0xFF2196F3) // Azul
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    // Transparencia del 15% para que sea sutil
+    return if (baseColor == MaterialTheme.colorScheme.surfaceVariant) baseColor else baseColor.copy(alpha = 0.15f)
+}
+
+@Composable
+fun ExpenseDetailedCard(expense: com.carlosalarcongu.nextdrive.data.Expense, onClick: () -> Unit) {
+    val icon = ExpenseIconMap[expense.iconName] ?: Icons.Default.Build
+    val dateString = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(expense.dateMillis))
+
+    val cardColor = getCategoryColor(expense.category)
+
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor)
+    ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, "", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+            Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.width(16.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(expense.title.uppercase(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text("${expense.category} • $dateString", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!expense.groupName.isNullOrBlank()) {
+                        SuggestionChip(onClick = {}, label = { Text(expense.groupName, style = MaterialTheme.typography.labelSmall) }, modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    if (!expense.comment.isNullOrBlank()) {
+                        Text(text = "\"${expense.comment}\"", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            Text("${expense.totalCost} €", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
     }
 }
