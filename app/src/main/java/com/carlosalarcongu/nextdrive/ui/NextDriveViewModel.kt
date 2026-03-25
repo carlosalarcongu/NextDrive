@@ -118,7 +118,85 @@ class NextDriveViewModel(private val dao: NextDriveDao) : ViewModel() {
     fun addFolder(folder: DocumentFolder) = viewModelScope.launch(Dispatchers.IO) { dao.insertFolder(folder) }
     fun deleteFolder(folder: DocumentFolder) = viewModelScope.launch(Dispatchers.IO) { dao.deleteFolder(folder) }
     fun getFoldersForVehicle(vehicleId: Long): Flow<List<DocumentFolder>> = dao.getFoldersForVehicle(vehicleId)
+    /**
+     * Calcula la previsión de gasto por años.
+     * @param selectedVehicleIds Set con los IDs de los coches a incluir. Si está vacío, incluye todos.
+     */
+    fun calculateForecast(expenses: List<Expense>, selectedVehicleIds: Set<Long>): List<YearForecast> {
+        // 1. Filtrar por vehículos seleccionados (si hay alguno)
+        val filteredExpenses = if (selectedVehicleIds.isNotEmpty()) {
+            expenses.filter { it.vehicleId in selectedVehicleIds }
+        } else {
+            expenses
+        }
+
+        if (filteredExpenses.isEmpty()) return emptyList()
+
+        // 2. Variables de tiempo actuales
+        val calendar = java.util.Calendar.getInstance()
+        val currentYear = calendar.get(java.util.Calendar.YEAR)
+        val currentDayOfYear = calendar.get(java.util.Calendar.DAY_OF_YEAR)
+        val daysInYear = calendar.getActualMaximum(java.util.Calendar.DAY_OF_YEAR)
+        val daysRemaining = daysInYear - currentDayOfYear
+
+        // 3. Agrupar gastos por año
+        val expensesByYear = filteredExpenses.groupBy {
+            val cal = java.util.Calendar.getInstance()
+            cal.timeInMillis = it.dateMillis
+            cal.get(java.util.Calendar.YEAR)
+        }
+
+        // 4. Calcular el Gasto Medio Diario Histórico (para hacer la proyección)
+        val firstExpenseDate = filteredExpenses.minOfOrNull { it.dateMillis } ?: System.currentTimeMillis()
+        // Usamos un mínimo de 30 días para no falsear la media si el primer gasto fue ayer
+        val daysSinceFirst = maxOf(30, ((System.currentTimeMillis() - firstExpenseDate) / (1000 * 60 * 60 * 24)).toInt())
+        val totalHistoricalSpent = filteredExpenses.sumOf { it.totalCost }
+        val historicalDailyAvg = totalHistoricalSpent / daysSinceFirst
+
+        // 5. Construir los resultados año a año
+        val results = mutableListOf<YearForecast>()
+        val minYear = expensesByYear.keys.minOrNull() ?: currentYear
+
+        for (year in minYear..currentYear) {
+            val spentThisYear = expensesByYear[year]?.sumOf { it.totalCost } ?: 0.0
+
+            if (year == currentYear) {
+                // Proyección hasta fin de año: Media diaria * Días que faltan
+                val projectedExtra = historicalDailyAvg * daysRemaining
+                results.add(
+                    YearForecast(
+                        year = year,
+                        actualSpent = spentThisYear,
+                        projectedExtra = projectedExtra,
+                        totalEstimated = spentThisYear + projectedExtra
+                    )
+                )
+            } else {
+                // Años pasados no tienen proyección extra
+                results.add(
+                    YearForecast(
+                        year = year,
+                        actualSpent = spentThisYear,
+                        projectedExtra = 0.0,
+                        totalEstimated = spentThisYear
+                    )
+                )
+            }
+        }
+
+        // Devolvemos la lista ordenada del año más reciente al más antiguo
+        return results.sortedByDescending { it.year }
+    }
 }
+
+
+// Añade esta clase de datos fuera del ViewModel o al principio del archivo
+data class YearForecast(
+    val year: Int,
+    val actualSpent: Double,
+    val projectedExtra: Double,
+    val totalEstimated: Double
+)
 
 class NextDriveViewModelFactory(private val dao: NextDriveDao) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

@@ -29,6 +29,8 @@ sealed class AppScreen {
     object Upcoming : AppScreen()
     object Settings : AppScreen()
     object UserGuide : AppScreen()
+    object Forecast : AppScreen() // NUEVA PANTALLA: Estimación Anual
+
     data class AddEditVehicle(val vehicleId: Long? = null) : AppScreen()
     data class Dashboard(val vehicleId: Long) : AppScreen()
     data class AddPieza(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
@@ -83,15 +85,25 @@ class MainActivity : ComponentActivity() {
                         when (val screen = currentScreen) {
                             is AppScreen.Garage -> GarageScreen(viewModel, { navigateTo(AppScreen.AddEditVehicle()) }, { navigateTo(AppScreen.Dashboard(it)) }, { navigateTo(AppScreen.UserGuide) })
                             is AppScreen.FuelPrices -> FuelPricesScreen()
-                            is AppScreen.StatisticsGlobal -> StatisticsPanelScreen(null, viewModel, navigateBack)
+
+                            // NUEVA INTEGRACIÓN DE FORECAST
+                            is AppScreen.StatisticsGlobal -> StatisticsPanelScreen(
+                                vehicleId = null,
+                                viewModel = viewModel,
+                                onNavigateBack = navigateBack,
+                                onNavigateToForecast = { navigateTo(AppScreen.Forecast) }
+                            )
+                            is AppScreen.Forecast -> ForecastScreen(
+                                viewModel = viewModel,
+                                onNavigateBack = navigateBack
+                            )
+
                             is AppScreen.Upcoming -> UpcomingScreen(viewModel,
                                 onAttend = { vId, title -> navigateTo(AppScreen.AddMantenimiento(vId, null, title)) },
                                 onEdit = { vId, eId, cat ->
                                     when(cat) { "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId, eId)); "Trámites" -> navigateTo(AppScreen.AddTramite(vId, eId)); "Avería" -> navigateTo(AppScreen.AddAveria(vId, eId)); "Pieza" -> navigateTo(AppScreen.AddPieza(vId, eId)); else -> navigateTo(AppScreen.AddMantenimiento(vId, eId)) }
                                 }
                             )
-
-                            // AQUI PASAMOS TODOS LOS PARÁMETROS NUEVOS A SETTINGS
                             is AppScreen.Settings -> SettingsScreen(
                                 viewModel = viewModel,
                                 themeMode = themeMode, colorPalette = colorPalette, fontSize = fontSize,
@@ -109,7 +121,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
-
                             is AppScreen.UserGuide -> UserGuideScreen(navigateBack)
                             is AppScreen.AddEditVehicle -> AddVehicleScreen(screen.vehicleId, viewModel, navigateBack)
                             is AppScreen.Dashboard -> VehicleDashboardScreen(
