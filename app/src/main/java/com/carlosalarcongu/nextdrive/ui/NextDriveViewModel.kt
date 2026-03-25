@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import com.carlosalarcongu.nextdrive.data.DocumentFolder
 
-// Clase auxiliar para agrupar todo el backup
 data class DatabaseBackup(
     val vehicles: List<Vehicle>,
     val expenses: List<Expense>,
@@ -27,21 +26,39 @@ data class DatabaseBackup(
 class NextDriveViewModel(private val dao: NextDriveDao) : ViewModel() {
 
     val allExpenses: StateFlow<List<Expense>> = dao.getAllExpensesSyncFlow().stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+    val allVehicles: StateFlow<List<Vehicle>> = dao.getAllVehicles().stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
 
-    val allVehicles: StateFlow<List<Vehicle>> = dao.getAllVehicles()
-        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+    // PAPELERA
+    val deletedVehicles: StateFlow<List<Vehicle>> = dao.getDeletedVehicles().stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+    val deletedExpenses: StateFlow<List<Expense>> = dao.getDeletedExpenses().stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
 
     fun addVehicle(vehicle: Vehicle) = viewModelScope.launch(Dispatchers.IO) { dao.insertVehicle(vehicle) }
     fun updateVehicle(vehicle: Vehicle) = viewModelScope.launch(Dispatchers.IO) { dao.updateVehicle(vehicle) }
-    fun deleteVehicle(vehicle: Vehicle) = viewModelScope.launch(Dispatchers.IO) { dao.deleteVehicle(vehicle) }
+
+    // Ahora mandamos a la papelera en lugar de destruir
+    fun softDeleteVehicle(vehicle: Vehicle) = viewModelScope.launch(Dispatchers.IO) { dao.updateVehicle(vehicle.copy(isDeleted = true)) }
+    fun restoreVehicle(vehicle: Vehicle) = viewModelScope.launch(Dispatchers.IO) { dao.updateVehicle(vehicle.copy(isDeleted = false)) }
+    fun hardDeleteVehicle(vehicle: Vehicle) = viewModelScope.launch(Dispatchers.IO) { dao.deleteVehicle(vehicle) }
+
     fun getVehicleById(id: Long): Flow<Vehicle> = dao.getVehicleById(id)
 
-    fun deleteMultipleExpenses(ids: List<Long>) = viewModelScope.launch(Dispatchers.IO) { dao.deleteExpensesByIds(ids) }
-    fun deleteExpenseById(id: Long) = viewModelScope.launch(Dispatchers.IO) { dao.deleteExpensesByIds(listOf(id)) }
+    // Gastos Múltiples a la Papelera
+    fun softDeleteMultipleExpenses(ids: List<Long>) = viewModelScope.launch(Dispatchers.IO) { dao.softDeleteExpensesByIds(ids) }
+    fun softDeleteExpenseById(id: Long) = viewModelScope.launch(Dispatchers.IO) { dao.softDeleteExpensesByIds(listOf(id)) }
 
     fun addExpense(expense: Expense) = viewModelScope.launch(Dispatchers.IO) { dao.insertExpense(expense) }
     fun updateExpense(expense: Expense) = viewModelScope.launch(Dispatchers.IO) { dao.updateExpense(expense) }
-    fun deleteExpense(expense: Expense) = viewModelScope.launch(Dispatchers.IO) { dao.deleteExpense(expense) }
+
+    // Papelera individual de Gastos
+    fun softDeleteExpense(expense: Expense) = viewModelScope.launch(Dispatchers.IO) { dao.updateExpense(expense.copy(isDeleted = true)) }
+    fun restoreExpense(expense: Expense) = viewModelScope.launch(Dispatchers.IO) { dao.updateExpense(expense.copy(isDeleted = false)) }
+    fun hardDeleteExpense(expense: Expense) = viewModelScope.launch(Dispatchers.IO) { dao.deleteExpense(expense) }
+
+    // Función rápida para Atender desde Próximos
+    fun markExpenseAsAttended(expense: Expense) = viewModelScope.launch(Dispatchers.IO) {
+        dao.updateExpense(expense.copy(isAttended = true))
+    }
+
     fun getExpenseById(id: Long): Flow<Expense> = dao.getExpenseById(id)
     fun getExpensesForVehicle(vehicleId: Long): Flow<List<Expense>> = dao.getExpensesForVehicle(vehicleId)
     fun getUniqueExpensesHistory(): Flow<List<Expense>> = dao.getUniqueExpensesHistory()
@@ -54,6 +71,13 @@ class NextDriveViewModel(private val dao: NextDriveDao) : ViewModel() {
         dao.deleteAllDocuments()
         dao.deleteAllExpenses()
         dao.deleteAllVehicles()
+    }
+
+    fun emptyTrash() = viewModelScope.launch(Dispatchers.IO) {
+        val vels = deletedVehicles.value
+        val exps = deletedExpenses.value
+        vels.forEach { dao.deleteVehicle(it) }
+        exps.forEach { dao.deleteExpense(it) }
     }
 
     fun exportDatabaseToJson(onResult: (String) -> Unit) {

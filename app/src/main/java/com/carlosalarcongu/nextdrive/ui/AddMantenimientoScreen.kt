@@ -4,8 +4,6 @@ import android.app.DatePickerDialog
 import android.content.Intent
 import android.provider.CalendarContract
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,7 +14,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,12 +31,16 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddMantenimientoScreen(vehicleId: Long, expenseId: Long? = null, categoryStr: String, prefillTitle: String? = null, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit) {
+fun AddMantenimientoScreen(vehicleId: Long, expenseId: Long? = null, initialCategoryStr: String, prefillTitle: String? = null, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val history by viewModel.getUniqueExpensesHistory().collectAsState(emptyList())
     val expenseToEdit by if (expenseId != null) viewModel.getExpenseById(expenseId).collectAsState(null) else remember { mutableStateOf(null) }
     val vehicle by viewModel.getVehicleById(vehicleId).collectAsState(null)
     var isInit by remember { mutableStateOf(false) }
+
+    // NUEVO: Estado para cambiar la categoría dinámicamente
+    var currentCategory by remember { mutableStateOf(initialCategoryStr) }
+    var expandedCategoryMenu by remember { mutableStateOf(false) }
 
     var title by remember { mutableStateOf(prefillTitle ?: "") }
     var groupName by remember { mutableStateOf("") }
@@ -49,24 +50,18 @@ fun AddMantenimientoScreen(vehicleId: Long, expenseId: Long? = null, categoryStr
     var laborCost by remember { mutableStateOf("") }
     var partsCost by remember { mutableStateOf("") }
     var totalCost by remember { mutableStateOf("") }
-
     var registeredKm by remember { mutableStateOf("") }
-
     var hasReminder by remember { mutableStateOf(false) }
     var notifyChecked by remember { mutableStateOf(true) }
     var calendarChecked by remember { mutableStateOf(false) }
 
-    // Nuevas opciones de Recordatorio
     val reminderOptions = listOf("+ KM", "KM Exactos", "+ Tiempo", "Fecha Exacta")
     var reminderMode by remember { mutableStateOf(reminderOptions[0]) }
-
     var reminderKmInput by remember { mutableStateOf("") }
     var reminderTimePeriod by remember { mutableStateOf("") }
     val timeUnits = listOf("Días", "Meses", "Años")
     var selectedTimeUnit by remember { mutableStateOf(timeUnits[1]) }
     var expandedTimeUnit by remember { mutableStateOf(false) }
-
-    // Para la fecha exacta
     val calendar = Calendar.getInstance()
     var selectedExactDateMillis by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -74,6 +69,7 @@ fun AddMantenimientoScreen(vehicleId: Long, expenseId: Long? = null, categoryStr
     LaunchedEffect(vehicle, expenseToEdit) {
         if (!isInit && vehicle != null) {
             if (expenseToEdit != null) {
+                currentCategory = expenseToEdit!!.category // Carga la categoría real
                 title = expenseToEdit!!.title
                 groupName = expenseToEdit!!.groupName ?: ""
                 workshop = expenseToEdit!!.workshop ?: ""
@@ -85,113 +81,66 @@ fun AddMantenimientoScreen(vehicleId: Long, expenseId: Long? = null, categoryStr
                 hasReminder = expenseToEdit!!.hasReminder
                 notifyChecked = expenseToEdit!!.reminderType == "NOTIFICACION" || expenseToEdit!!.reminderType == "AMBOS"
                 calendarChecked = expenseToEdit!!.reminderType == "CALENDARIO" || expenseToEdit!!.reminderType == "AMBOS"
-
-                // Mapear modo antiguo a nuevo si es necesario
-                if (expenseToEdit!!.reminderKm != null) {
-                    reminderMode = "KM Exactos" // Asumimos exactos por simplicidad al editar
-                    reminderKmInput = expenseToEdit!!.reminderKm.toString()
-                }
-                if (expenseToEdit!!.reminderDateMillis != null && expenseToEdit!!.reminderTimePeriod == null) {
-                    reminderMode = "Fecha Exacta"
-                    selectedExactDateMillis = expenseToEdit!!.reminderDateMillis
-                } else if (expenseToEdit!!.reminderTimePeriod != null) {
-                    reminderMode = "+ Tiempo"
-                    reminderTimePeriod = expenseToEdit!!.reminderTimePeriod.toString()
-                    selectedTimeUnit = expenseToEdit!!.reminderTimeUnit ?: "Meses"
-                }
-            } else {
-                registeredKm = vehicle!!.currentKm?.toString() ?: ""
-            }
+                if (expenseToEdit!!.reminderKm != null) { reminderMode = "KM Exactos"; reminderKmInput = expenseToEdit!!.reminderKm.toString() }
+                if (expenseToEdit!!.reminderDateMillis != null && expenseToEdit!!.reminderTimePeriod == null) { reminderMode = "Fecha Exacta"; selectedExactDateMillis = expenseToEdit!!.reminderDateMillis }
+                else if (expenseToEdit!!.reminderTimePeriod != null) { reminderMode = "+ Tiempo"; reminderTimePeriod = expenseToEdit!!.reminderTimePeriod.toString(); selectedTimeUnit = expenseToEdit!!.reminderTimeUnit ?: "Meses" }
+            } else { registeredKm = vehicle!!.currentKm?.toString() ?: "" }
             isInit = true
         }
     }
 
     val pastGroups = history.mapNotNull { it.groupName }.distinct().filter { it.contains(groupName, true) }
 
-    fun calculateFutureDate(): Long? {
-        if (!hasReminder) return null
-
-        return when (reminderMode) {
-            "+ Tiempo" -> {
-                val period = reminderTimePeriod.toIntOrNull() ?: 0
-                val cal = Calendar.getInstance()
-                when(selectedTimeUnit) { "Días" -> cal.add(Calendar.DAY_OF_YEAR, period); "Meses" -> cal.add(Calendar.MONTH, period); "Años" -> cal.add(Calendar.YEAR, period) }
-                cal.timeInMillis
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text(currentCategory.uppercase()) },
+            navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } },
+            actions = {
+                if (expenseId != null) {
+                    IconButton(onClick = {
+                        expenseToEdit?.let { viewModel.softDeleteExpense(it) } // A LA PAPELERA
+                        onNavigateBack()
+                    }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
+                }
             }
-            "Fecha Exacta" -> selectedExactDateMillis
-            else -> null // Los de KM no tienen fecha futura fija
-        }
-    }
-
-    fun calculateTargetKm(): Int? {
-        if (!hasReminder) return null
-        val inputVal = reminderKmInput.toIntOrNull() ?: return null
-        return when (reminderMode) {
-            "+ KM" -> (registeredKm.toIntOrNull() ?: vehicle?.currentKm ?: 0) + inputVal
-            "KM Exactos" -> inputVal
-            else -> null
-        }
-    }
-
-    Scaffold(topBar = { TopAppBar(title = { Text(categoryStr.uppercase()) }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } },actions = {
-        // ¡NUEVO BOTÓN DE BORRADO INDIVIDUAL!
-        if (expenseId != null) {
-            IconButton(onClick = {
-                expenseToEdit?.let { viewModel.deleteExpenseById(it.id) }
-                onNavigateBack()
-            }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
-        }
-    }) }) { paddingValues ->
+        )
+    }) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
+            // NUEVO BLOQUE: CAMBIAR CATEGORÍA
+            ExposedDropdownMenuBox(expanded = expandedCategoryMenu, onExpandedChange = { expandedCategoryMenu = !expandedCategoryMenu }) {
+                OutlinedTextField(
+                    value = currentCategory, onValueChange = {}, readOnly = true,
+                    label = { Text("Tipo de Registro") },
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategoryMenu) },
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
+                )
+                DropdownMenu(expanded = expandedCategoryMenu, onDismissRequest = { expandedCategoryMenu = false }) {
+                    listOf("Mantenimiento", "Avería", "Pieza", "Trámites").forEach { cat ->
+                        DropdownMenuItem(text = { Text(cat) }, onClick = { currentCategory = cat; expandedCategoryMenu = false })
+                    }
+                }
+            }
+
             Text("INFORMACIÓN PRINCIPAL", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text("Recurso / Intervención Concreta*") },
-                placeholder = { Text("p. ej. Cambio de Aceite y Filtro") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
+            OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Recurso / Intervención Concreta*") }, placeholder = { Text("p. ej. Cambio de Aceite") }, modifier = Modifier.fillMaxWidth())
             GradientDivider()
 
             Text("DATOS DEL SERVICIO", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = registeredKm,
-                    onValueChange = { registeredKm = it.filter { c->c.isDigit() } },
-                    label = { Text("KM Actuales") },
-                    placeholder = { Text("p. ej. 125000") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), // Obliga numérico fuerte
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedTextField(
-                    value = workshop,
-                    onValueChange = { workshop = it },
-                    label = { Text("Taller / Lugar") },
-                    placeholder = { Text("p. ej. Talleres Paco") },
-                    modifier = Modifier.weight(1f)
-                )
+                OutlinedTextField(value = registeredKm, onValueChange = { registeredKm = it.filter { c->c.isDigit() } }, label = { Text("KM Actuales") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), modifier = Modifier.weight(1f))
+                OutlinedTextField(value = workshop, onValueChange = { workshop = it }, label = { Text("Taller / Lugar") }, modifier = Modifier.weight(1f))
             }
 
             ExposedDropdownMenuBox(expanded = expandedGroup, onExpandedChange = { expandedGroup = !expandedGroup }) {
-                OutlinedTextField(
-                    value = groupName,
-                    onValueChange = { groupName = it; expandedGroup = true },
-                    label = { Text("Categoría / Grupo") },
-                    placeholder = { Text("p. ej. Motor, Suspensión") },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedGroup) }
-                )
+                OutlinedTextField(value = groupName, onValueChange = { groupName = it; expandedGroup = true }, label = { Text("Categoría / Grupo") }, modifier = Modifier.menuAnchor().fillMaxWidth(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedGroup) })
                 if (pastGroups.isNotEmpty() && groupName.isNotBlank()) {
                     DropdownMenu(expanded = expandedGroup, onDismissRequest = { expandedGroup = false }, properties = PopupProperties(focusable=false)) {
                         pastGroups.forEach { g -> DropdownMenuItem(text = { Text(g) }, onClick = { groupName = g; expandedGroup = false }) }
                     }
                 }
             }
-
             GradientDivider()
 
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -209,7 +158,6 @@ fun AddMantenimientoScreen(vehicleId: Long, expenseId: Long? = null, categoryStr
                     OutlinedTextField(value = totalCost, onValueChange = { totalCost = it; if(isItemized) { laborCost=""; partsCost=""; isItemized=false } }, label = { Text("Total Factura (€)*") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.titleLarge)
                 }
             }
-
             GradientDivider()
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -220,30 +168,13 @@ fun AddMantenimientoScreen(vehicleId: Long, expenseId: Long? = null, categoryStr
             if (hasReminder) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-
-                        OutlinedButton(onClick = { Toast.makeText(context, "Próximamente: Sugerencias según manual oficial", Toast.LENGTH_SHORT).show() }, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.AutoAwesome, ""); Spacer(Modifier.width(8.dp)); Text("Sugerir métricas oficiales")
-                        }
-
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            reminderOptions.forEach { opt ->
-                                FilterChip(selected = reminderMode == opt, onClick = { reminderMode = opt }, label = { Text(opt) })
-                            }
+                            reminderOptions.forEach { opt -> FilterChip(selected = reminderMode == opt, onClick = { reminderMode = opt }, label = { Text(opt) }) }
                         }
-
                         when (reminderMode) {
-                            "+ KM", "KM Exactos" -> {
-                                OutlinedTextField(
-                                    value = reminderKmInput,
-                                    onValueChange = { reminderKmInput = it.filter { c -> c.isDigit() } },
-                                    label = { Text(if (reminderMode == "+ KM") "Sumar kilómetros" else "Kilometraje objetivo") },
-                                    placeholder = { Text(if (reminderMode == "+ KM") "p. ej. 15000" else "p. ej. 140000") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
+                            "+ KM", "KM Exactos" -> { OutlinedTextField(value = reminderKmInput, onValueChange = { reminderKmInput = it.filter { c -> c.isDigit() } }, label = { Text("Kilometraje") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), modifier = Modifier.fillMaxWidth()) }
                             "+ Tiempo" -> {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(value = reminderTimePeriod, onValueChange = { reminderTimePeriod = it.filter { c->c.isDigit() } }, label = { Text("Cantidad") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), modifier = Modifier.weight(1f))
                                     ExposedDropdownMenuBox(expanded = expandedTimeUnit, onExpandedChange = { expandedTimeUnit = !expandedTimeUnit }, modifier = Modifier.weight(1f)) {
                                         OutlinedTextField(value = selectedTimeUnit, onValueChange = {}, readOnly = true, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedTimeUnit) }, modifier = Modifier.menuAnchor())
@@ -251,84 +182,38 @@ fun AddMantenimientoScreen(vehicleId: Long, expenseId: Long? = null, categoryStr
                                     }
                                 }
                             }
-                            "Fecha Exacta" -> {
-                                val dateStr = if (selectedExactDateMillis != null) SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(selectedExactDateMillis!!)) else "Seleccionar Fecha"
-                                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.small) {
-                                    Icon(Icons.Default.CalendarToday, ""); Spacer(Modifier.width(8.dp)); Text(dateStr)
-                                }
-                            }
+                            "Fecha Exacta" -> { OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CalendarToday, ""); Spacer(Modifier.width(8.dp)); Text(if (selectedExactDateMillis != null) SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(selectedExactDateMillis!!)) else "Seleccionar Fecha") } }
                         }
-
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                            Checkbox(checked = notifyChecked, onCheckedChange = { notifyChecked = it })
-                            Text("Notificación App")
+                            Checkbox(checked = notifyChecked, onCheckedChange = { notifyChecked = it }); Text("Notificación")
                             Spacer(modifier = Modifier.width(16.dp))
-                            Checkbox(checked = calendarChecked, onCheckedChange = { calendarChecked = it })
-                            Text("Calendario")
+                            Checkbox(checked = calendarChecked, onCheckedChange = { calendarChecked = it }); Text("Calendario")
                         }
                     }
                 }
             }
-
             Spacer(modifier = Modifier.weight(1f))
             Button(onClick = {
                 val t = totalCost.toDoubleOrNull()
                 if (title.isNotBlank() && t != null) {
-                    val rType = if (notifyChecked && calendarChecked) "AMBOS" else if (calendarChecked) "CALENDARIO" else "NOTIFICACION"
-                    val targetDate = calculateFutureDate()
-                    val targetKm = calculateTargetKm()
-
                     val exp = Expense(
-                        id = expenseId ?: 0, vehicleId = vehicleId, title = title,
-                        dateMillis = expenseToEdit?.dateMillis ?: System.currentTimeMillis(),
-                        totalCost = t, category = categoryStr, groupName = groupName.ifBlank{null},
-                        workshop = workshop.ifBlank{null}, isItemized = isItemized,
-                        laborCost = laborCost.toDoubleOrNull(), partsCost = partsCost.toDoubleOrNull(),
-                        registeredKm = registeredKm.toIntOrNull(), hasReminder = hasReminder,
-                        reminderType = if (hasReminder) rType else null,
-                        reminderKm = targetKm,
-                        reminderDateMillis = targetDate,
-                        reminderTimePeriod = if (reminderMode == "+ Tiempo") reminderTimePeriod.toIntOrNull() else null,
-                        reminderTimeUnit = if (reminderMode == "+ Tiempo") selectedTimeUnit else null,
-                        iconName = if(categoryStr=="Avería") "Reparación" else "Herramientas"
+                        id = expenseId ?: 0, vehicleId = vehicleId, title = title, dateMillis = expenseToEdit?.dateMillis ?: System.currentTimeMillis(),
+                        totalCost = t, category = currentCategory, // Usa la categoría seleccionada
+                        groupName = groupName.ifBlank{null}, workshop = workshop.ifBlank{null}, isItemized = isItemized, laborCost = laborCost.toDoubleOrNull(), partsCost = partsCost.toDoubleOrNull(), registeredKm = registeredKm.toIntOrNull(), hasReminder = hasReminder,
+                        reminderType = if(hasReminder) (if (notifyChecked && calendarChecked) "AMBOS" else if (calendarChecked) "CALENDARIO" else "NOTIFICACION") else null,
+                        reminderKm = if (hasReminder && (reminderMode == "+ KM" || reminderMode == "KM Exactos")) (if(reminderMode=="+ KM") (registeredKm.toIntOrNull()?:vehicle?.currentKm?:0) + (reminderKmInput.toIntOrNull()?:0) else reminderKmInput.toIntOrNull()) else null,
+                        reminderDateMillis = if (hasReminder && (reminderMode == "+ Tiempo" || reminderMode == "Fecha Exacta")) (if(reminderMode=="Fecha Exacta") selectedExactDateMillis else { val cal = Calendar.getInstance(); val p = reminderTimePeriod.toIntOrNull()?:0; when(selectedTimeUnit){"Días"->cal.add(Calendar.DAY_OF_YEAR,p); "Meses"->cal.add(Calendar.MONTH,p); "Años"->cal.add(Calendar.YEAR,p)}; cal.timeInMillis }) else null,
+                        iconName = if(currentCategory=="Avería") "Reparación" else "Herramientas"
                     )
-
                     if (expenseId == null) viewModel.addExpense(exp) else viewModel.updateExpense(exp)
-
-                    if (hasReminder && notifyChecked && targetDate != null && targetDate > System.currentTimeMillis()) {
-                        scheduleNotification(context, targetDate, "Revisión Pendiente", "Es momento de revisar: $title")
-                    }
-
-                    if (hasReminder && calendarChecked && targetDate != null) {
-                        val intent = Intent(Intent.ACTION_INSERT).apply {
-                            data = CalendarContract.Events.CONTENT_URI
-                            putExtra(CalendarContract.Events.TITLE, "Mantenimiento: $title")
-                            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, targetDate)
-                        }
-                        context.startActivity(intent)
-                    }
-
                     onNavigateBack()
-                } else Toast.makeText(context, "Faltan datos obligatorios", Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(context, "Faltan datos", Toast.LENGTH_SHORT).show()
             }, modifier = Modifier.fillMaxWidth()) { Text("GUARDAR") }
         }
 
         if (showDatePicker) {
-            val datePickerDialog = DatePickerDialog(
-                context,
-                { _, year, month, dayOfMonth ->
-                    calendar.set(year, month, dayOfMonth)
-                    selectedExactDateMillis = calendar.timeInMillis
-                    showDatePicker = false
-                },
-                calendar.get(Calendar.YEAR),
-                calendar.get(Calendar.MONTH),
-                calendar.get(Calendar.DAY_OF_MONTH)
-            )
-            datePickerDialog.setOnDismissListener { showDatePicker = false }
-            datePickerDialog.show()
+            DatePickerDialog(context, { _, y, m, d -> calendar.set(y, m, d); selectedExactDateMillis = calendar.timeInMillis; showDatePicker = false }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).apply { setOnDismissListener { showDatePicker = false } }.show()
         }
     }
 }

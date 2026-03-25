@@ -1,10 +1,7 @@
 package com.carlosalarcongu.nextdrive.ui
 
-import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,14 +13,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -34,11 +27,9 @@ fun VehicleDashboardScreen(
 ) {
     val vehicle by viewModel.getVehicleById(vehicleId).collectAsState(initial = null)
     val expenses by viewModel.getExpensesForVehicle(vehicleId).collectAsState(initial = emptyList())
-    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     var isFabExpanded by remember { mutableStateOf(false) }
 
-    // ESTADO PARA MULTISELECCIÓN
     var selectedExpenseIds by remember { mutableStateOf(setOf<Long>()) }
 
     if (vehicle == null) return
@@ -51,7 +42,7 @@ fun VehicleDashboardScreen(
                     navigationIcon = { IconButton(onClick = { selectedExpenseIds = emptySet() }) { Icon(Icons.Default.Close, "Cancelar") } },
                     actions = {
                         IconButton(onClick = {
-                            viewModel.deleteMultipleExpenses(selectedExpenseIds.toList())
+                            viewModel.softDeleteMultipleExpenses(selectedExpenseIds.toList())
                             selectedExpenseIds = emptySet()
                         }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
                     },
@@ -84,7 +75,6 @@ fun VehicleDashboardScreen(
         }
     ) { paddingValues ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(paddingValues), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            // ... (Vehicle Card y Documentos igual que antes) ...
             item {
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -128,7 +118,8 @@ fun VehicleDashboardScreen(
                         if (isSelected) {
                             Icon(Icons.Default.CheckCircle, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                         } else {
-                            val icon = ExpenseIconMap[expense.iconName] ?: Icons.Default.Build
+                            // ¡CORRECCIÓN! Usamos el nuevo nombre único
+                            val icon = DashboardIconMap[expense.iconName] ?: Icons.Default.Build
                             Icon(icon, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                         Spacer(modifier = Modifier.width(16.dp))
@@ -144,10 +135,8 @@ fun VehicleDashboardScreen(
     }
 }
 
-// --- COMPONENTES VISUALES MOVIDOS DESDE EL ANTIGUO PANEL DE GASTOS ---
-
 @Composable
-fun FabMenuItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+private fun FabMenuItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
         Surface(
             shape = RoundedCornerShape(8.dp),
@@ -171,51 +160,22 @@ fun FabMenuItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVe
     }
 }
 
-@Composable
-fun getCategoryColor(category: String): androidx.compose.ui.graphics.Color {
+private fun getCategoryColor(category: String): androidx.compose.ui.graphics.Color {
     val baseColor = when (category) {
         "Pieza" -> androidx.compose.ui.graphics.Color.Gray
-        "Repostaje" -> androidx.compose.ui.graphics.Color(0xFF4CAF50) // Verde
-        "Mantenimiento" -> androidx.compose.ui.graphics.Color(0xFFFF9800) // Naranja
-        "Avería" -> MaterialTheme.colorScheme.error // Rojo
-        "Trámites" -> androidx.compose.ui.graphics.Color(0xFF2196F3) // Azul
-        else -> MaterialTheme.colorScheme.surfaceVariant
+        "Repostaje" -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
+        "Mantenimiento" -> androidx.compose.ui.graphics.Color(0xFFFF9800)
+        "Avería" -> androidx.compose.ui.graphics.Color(0xFFF44336)
+        "Trámites" -> androidx.compose.ui.graphics.Color(0xFF2196F3)
+        else -> androidx.compose.ui.graphics.Color(0xFF424242)
     }
-    // Transparencia del 15% para que sea sutil
-    return if (baseColor == MaterialTheme.colorScheme.surfaceVariant) baseColor else baseColor.copy(alpha = 0.15f)
+    return baseColor.copy(alpha = 0.15f)
 }
 
-@Composable
-fun ExpenseDetailedCard(expense: com.carlosalarcongu.nextdrive.data.Expense, onClick: () -> Unit) {
-    val icon = ExpenseIconMap[expense.iconName] ?: Icons.Default.Build
-    val dateString = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(expense.dateMillis))
-
-    val cardColor = getCategoryColor(expense.category)
-
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = cardColor)
-    ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(expense.title.uppercase(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                Text("${expense.category} • $dateString", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!expense.groupName.isNullOrBlank()) {
-                        SuggestionChip(onClick = {}, label = { Text(expense.groupName, style = MaterialTheme.typography.labelSmall) }, modifier = Modifier.height(24.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    if (!expense.comment.isNullOrBlank()) {
-                        Text(text = "\"${expense.comment}\"", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                }
-            }
-            Text("${expense.totalCost} €", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        }
-    }
-}
+// ¡CAMBIADO EL NOMBRE A DASHBOARD ICON MAP!
+private val DashboardIconMap = mapOf(
+    "Herramientas" to Icons.Default.Build,
+    "Reparación" to Icons.Default.CarCrash,
+    "Gasolinera" to Icons.Default.LocalGasStation,
+    "Documento" to Icons.Default.Assignment
+)

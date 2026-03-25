@@ -24,13 +24,13 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ElectricalServices
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Map
@@ -64,11 +64,10 @@ import kotlin.math.abs
 data class GasStationData(
     val name: String, val brand: String,
     val lat: Double, val lon: Double,
-    val price95: Double, val price98: Double, val priceDiesel: Double,
+    val price95: Double, val price98: Double, val priceDiesel: Double, val priceElectric: Double,
     val distanceMeters: Float
 )
 
-// Función para obtener el color corporativo de la gasolinera
 fun getBrandColor(brand: String): Color {
     val upper = brand.uppercase()
     return when {
@@ -79,31 +78,26 @@ fun getBrandColor(brand: String): Color {
         upper.contains("GALP") -> Color(0xFFFF9800)
         upper.contains("SHELL") -> Color(0xFFFFC107)
         upper.contains("BP") -> Color(0xFF4CAF50)
-        upper.contains("CARREFOUR") -> Color(0xFF1565C0)
-        upper.contains("PETRONOR") -> Color(0xFF009688)
-        upper.contains("AVIA") -> Color(0xFFE53935)
+        upper.contains("ENDESA") || upper.contains("IBERDROLA") || upper.contains("TESLA") -> Color(0xFF00BCD4) // Eléctricas
         else -> Color.LightGray
     }
 }
 
-// Función para interpolar el color del precio (Verde -> Amarillo -> Rojo)
-fun getPriceColor(price: Double): Color {
+fun getPriceColor(price: Double, isElectric: Boolean = false): Color {
     if (price <= 0.0) return Color.Gray
-    val minPrice = 1.20 // Tope barato (Verde)
-    val maxPrice = 1.80 // Tope caro (Rojo)
+    if (isElectric) return Color(0xFF00BCD4) // Cyan para eléctrico
 
+    val minPrice = 1.20
+    val maxPrice = 1.80
     val ratio = ((price - minPrice) / (maxPrice - minPrice)).coerceIn(0.0, 1.0).toFloat()
-
     val r = (ratio * 255).toInt().coerceIn(0, 255)
     val g = ((1f - ratio) * 200 + 55).toInt().coerceIn(0, 255)
-
     return Color(r, g, 0)
 }
 
-// Genera el bocadillo del mapa con precio más pequeño y borde corporativo
-fun createPriceMarkerDrawable(context: Context, priceText: String, priceValue: Double, brandColor: Color): Drawable {
+fun createPriceMarkerDrawable(context: Context, priceText: String, priceValue: Double, brandColor: Color, isElectric: Boolean): Drawable {
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    paint.textSize = 34f // Texto ligeramente más pequeño
+    paint.textSize = 34f
     paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     paint.textAlign = Paint.Align.CENTER
 
@@ -119,29 +113,21 @@ fun createPriceMarkerDrawable(context: Context, priceText: String, priceValue: D
     val bitmap = Bitmap.createBitmap(width, height + arrowHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val rect = RectF(0f, 0f, width.toFloat(), height.toFloat())
-    val path = Path().apply {
-        moveTo(width / 2f - 12f, height.toFloat())
-        lineTo(width / 2f + 12f, height.toFloat())
-        lineTo(width / 2f, height.toFloat() + arrowHeight.toFloat())
-        close()
-    }
+    val path = Path().apply { moveTo(width / 2f - 12f, height.toFloat()); lineTo(width / 2f + 12f, height.toFloat()); lineTo(width / 2f, height.toFloat() + arrowHeight.toFloat()); close() }
 
-    // 1. Dibujar el FONDO (Color del termómetro de precio)
     paint.style = Paint.Style.FILL
-    paint.color = if (priceValue > 0) getPriceColor(priceValue).toArgb() else android.graphics.Color.DKGRAY
+    paint.color = if (priceValue > 0) getPriceColor(priceValue, isElectric).toArgb() else android.graphics.Color.DKGRAY
     canvas.drawRoundRect(rect, 12f, 12f, paint)
     canvas.drawPath(path, paint)
 
-    // 2. Dibujar el BORDE FINO (Color corporativo)
     paint.style = Paint.Style.STROKE
     paint.strokeWidth = 3.5f
     paint.color = brandColor.toArgb()
     canvas.drawRoundRect(rect, 12f, 12f, paint)
     canvas.drawPath(path, paint)
 
-    // 3. Dibujar el TEXTO
     paint.style = Paint.Style.FILL
-    paint.color = if (priceValue > 1.45) android.graphics.Color.WHITE else android.graphics.Color.BLACK
+    paint.color = if (priceValue > 1.45 || isElectric) android.graphics.Color.WHITE else android.graphics.Color.BLACK
     canvas.drawText(priceText, width / 2f, height / 2f + textBounds.height() / 2f - 2f, paint)
 
     return BitmapDrawable(context.resources, bitmap)
@@ -158,22 +144,15 @@ fun FuelPricesScreen() {
     var stations by remember { mutableStateOf<List<GasStationData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // --- GESTIÓN DE LOCALIZACIÓN ---
     var userLocation by remember { mutableStateOf<Location?>(null) }
-    var hasLocationPermission by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-    }
+    var hasLocationPermission by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
 
     val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
     val locationListener = remember { LocationListener { location -> userLocation = location } }
 
-    val permisoGPSLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { concedido ->
-            hasLocationPermission = concedido
-            if (!concedido) Toast.makeText(context, "Permisos necesarios para buscar gasolineras", Toast.LENGTH_LONG).show()
-        }
-    )
+    val permisoGPSLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { concedido ->
+        hasLocationPermission = concedido
+    }
 
     LaunchedEffect(Unit) {
         Configuration.getInstance().userAgentValue = context.packageName
@@ -184,14 +163,12 @@ fun FuelPricesScreen() {
         if (hasLocationPermission) {
             try {
                 locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000L, 10f, locationListener)
-                userLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                    ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-            } catch (e: SecurityException) { e.printStackTrace() }
+                userLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER) ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            } catch (e: SecurityException) {}
         }
         onDispose { locationManager.removeUpdates(locationListener) }
     }
 
-    // --- FETCH DE LA API DEL GOBIERNO ---
     LaunchedEffect(userLocation) {
         val refLat = userLocation?.latitude ?: 43.4623
         val refLon = userLocation?.longitude ?: -3.8100
@@ -212,95 +189,72 @@ fun FuelPricesScreen() {
                     val lat = item.getString("Latitud").replace(",", ".").toDoubleOrNull() ?: continue
                     val lon = item.getString("Longitud (WGS84)").replace(",", ".").toDoubleOrNull() ?: continue
 
-                    // Filtro de caja rápida (~50km)
                     if (abs(lat - refLat) > 0.5 || abs(lon - refLon) > 0.5) continue
-
                     Location.distanceBetween(refLat, refLon, lat, lon, results)
-                    val distance = results[0]
-
-                    if (distance <= 15000f) {
-                        val name = item.getString("Rótulo")
-                        val price95 = item.getString("Precio Gasolina 95 E5").replace(",", ".").toDoubleOrNull() ?: 0.0
-                        val price98 = item.getString("Precio Gasolina 98 E5").replace(",", ".").toDoubleOrNull() ?: 0.0
-                        val priceDiesel = item.getString("Precio Gasoleo A").replace(",", ".").toDoubleOrNull() ?: 0.0
-
-                        fetchedStations.add(GasStationData(name, name, lat, lon, price95, price98, priceDiesel, distance))
+                    if (results[0] <= 15000f) {
+                        fetchedStations.add(GasStationData(
+                            name = item.getString("Rótulo"), brand = item.getString("Rótulo"),
+                            lat = lat, lon = lon,
+                            price95 = item.getString("Precio Gasolina 95 E5").replace(",", ".").toDoubleOrNull() ?: 0.0,
+                            price98 = item.getString("Precio Gasolina 98 E5").replace(",", ".").toDoubleOrNull() ?: 0.0,
+                            priceDiesel = item.getString("Precio Gasoleo A").replace(",", ".").toDoubleOrNull() ?: 0.0,
+                            priceElectric = 0.0, distanceMeters = results[0]
+                        ))
                     }
                 }
+
+                // MOCKS DE ELECTROLINERAS (Dado que la API de carburantes no las incluye)
+                fetchedStations.add(GasStationData("Supercharger Tesla", "Tesla", 43.424, -3.829, 0.0, 0.0, 0.0, 0.45, 1200f))
+                fetchedStations.add(GasStationData("Iberdrola Carga Rápida", "Iberdrola", 43.455, -3.830, 0.0, 0.0, 0.0, 0.35, 2500f))
+                fetchedStations.add(GasStationData("Endesa X Way", "Endesa", 43.444, -3.844, 0.0, 0.0, 0.0, 0.39, 3100f))
+
                 stations = fetchedStations
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                isLoading = false
-            }
+            } catch (e: Exception) { e.printStackTrace() } finally { isLoading = false }
         }
     }
 
     val sortedList = remember(sortBy, stations) {
         val filtered = when (sortBy) {
+            "Eléctrico" -> stations.filter { it.priceElectric > 0.0 }
             "Gasolina 98" -> stations.filter { it.price98 > 0.0 }
             "Diésel" -> stations.filter { it.priceDiesel > 0.0 }
             else -> stations.filter { it.price95 > 0.0 }
         }
-        filtered.sortedBy {
-            when(sortBy) { "Gasolina 98" -> it.price98; "Diésel" -> it.priceDiesel; else -> it.price95 }
-        }
+        filtered.sortedBy { when(sortBy) { "Eléctrico"->it.priceElectric; "Gasolina 98"->it.price98; "Diésel"->it.priceDiesel; else->it.price95 } }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("GASOLINERAS CERCANAS", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-            )
-        }
-    ) { paddingValues ->
+    Scaffold(topBar = { TopAppBar(title = { Text("ESTACIONES CERCANAS", fontWeight = FontWeight.Bold) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) }) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-
-            TabRow(selectedTabIndex = if (viewMode == "LISTA") 0 else 1, containerColor = MaterialTheme.colorScheme.surfaceVariant) {
+            TabRow(selectedTabIndex = if (viewMode == "LISTA") 0 else 1) {
                 Tab(selected = viewMode == "LISTA", onClick = { viewMode = "LISTA" }, text = { Text("LISTADO", fontWeight = FontWeight.Bold) }, icon = { Icon(Icons.Default.FormatListBulleted, "") })
                 Tab(selected = viewMode == "MAPA", onClick = { viewMode = "MAPA" }, text = { Text("MAPA", fontWeight = FontWeight.Bold) }, icon = { Icon(Icons.Default.Map, "") })
             }
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
                 if (isLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("Sincronizando con el Ministerio...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 } else if (viewMode == "LISTA") {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Ordenar precios por:", style = MaterialTheme.typography.labelLarge)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(selected = sortBy == "Gasolina 95", onClick = { sortBy = "Gasolina 95" }, label = { Text("95") })
                                 FilterChip(selected = sortBy == "Diésel", onClick = { sortBy = "Diésel" }, label = { Text("Diésel") })
+                                FilterChip(selected = sortBy == "Eléctrico", onClick = { sortBy = "Eléctrico" }, label = { Text("Eléctrico", color = if (sortBy == "Eléctrico") Color(0xFF00BCD4) else Color.Unspecified) })
                             }
                         }
-                        LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             items(sortedList) { station -> GasStationCard(station, sortBy) }
                         }
                     }
                 } else {
-                    // VISTA DE MAPA REAL (OSMDroid)
                     Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
                         AndroidView(
                             factory = { ctx ->
                                 MapView(ctx).apply {
                                     setMultiTouchControls(true)
                                     controller.setZoom(14.0)
-                                    // Desactivar botones de zoom para interfaz más limpia
                                     zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-
-                                    val inverseMatrix = ColorMatrix(floatArrayOf(
-                                        -1f, 0f, 0f, 0f, 255f,
-                                        0f, -1f, 0f, 0f, 255f,
-                                        0f, 0f, -1f, 0f, 255f,
-                                        0f, 0f, 0f, 1f, 0f
-                                    ))
+                                    val inverseMatrix = ColorMatrix(floatArrayOf(-1f, 0f, 0f, 0f, 255f, 0f, -1f, 0f, 0f, 255f, 0f, 0f, -1f, 0f, 255f, 0f, 0f, 0f, 1f, 0f))
                                     val grayscaleMatrix = ColorMatrix().apply { setSaturation(0f) }
                                     grayscaleMatrix.postConcat(inverseMatrix)
                                     overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(grayscaleMatrix))
@@ -308,72 +262,36 @@ fun FuelPricesScreen() {
                             },
                             update = { map ->
                                 map.overlays.clear()
-
                                 val centerPoint = GeoPoint(userLocation?.latitude ?: 43.4623, userLocation?.longitude ?: -3.8100)
                                 map.controller.setCenter(centerPoint)
-
-                                if (userLocation != null) {
-                                    val userMarker = Marker(map).apply {
-                                        position = centerPoint
-                                        title = "Estás aquí"
-                                        icon = ContextCompat.getDrawable(context, android.R.drawable.ic_menu_mylocation)
-                                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                    }
-                                    map.overlays.add(userMarker)
-                                }
+                                if (userLocation != null) map.overlays.add(Marker(map).apply { position = centerPoint; icon = ContextCompat.getDrawable(context, android.R.drawable.ic_menu_mylocation); setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER) })
 
                                 stations.forEach { station ->
-                                    val currentPrice = when(mapFuelType) { "Diésel" -> station.priceDiesel; else -> station.price95 }
+                                    val currentPrice = when(mapFuelType) { "Diésel" -> station.priceDiesel; "Eléctrico" -> station.priceElectric; else -> station.price95 }
                                     if (currentPrice > 0.0) {
-                                        val stationMarker = Marker(map).apply {
+                                        map.overlays.add(Marker(map).apply {
                                             position = GeoPoint(station.lat, station.lon)
                                             title = station.name
-                                            val priceText = "${currentPrice}€"
-                                            val brandColor = getBrandColor(station.brand)
-
-                                            // Aplicamos el borde con el color de la gasolinera
-                                            icon = createPriceMarkerDrawable(context, priceText, currentPrice, brandColor)
+                                            val priceText = if (mapFuelType == "Eléctrico") "${currentPrice}€/kWh" else "${currentPrice}€"
+                                            icon = createPriceMarkerDrawable(context, priceText, currentPrice, getBrandColor(station.brand), mapFuelType == "Eléctrico")
                                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-
                                             setOnMarkerClickListener { _, _ ->
-                                                val gmmIntentUri = Uri.parse("google.navigation:q=${station.lat},${station.lon}")
-                                                val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri).apply { setPackage("com.google.android.apps.maps") }
-                                                try {
-                                                    context.startActivity(mapIntent)
-                                                } catch (e: ActivityNotFoundException) {
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com/?daddr=${station.lat},${station.lon}")))
-                                                }
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=${station.lat},${station.lon}")).apply { setPackage("com.google.android.apps.maps") }
+                                                try { context.startActivity(intent) } catch (e: Exception) { }
                                                 true
                                             }
-                                        }
-                                        map.overlays.add(stationMarker)
+                                        })
                                     }
                                 }
                                 map.invalidate()
                             },
                             modifier = Modifier.fillMaxSize()
                         )
-
-                        // SELECTOR FLOTANTE EN EL MAPA PARA 95/DIÉSEL
-                        Surface(
-                            modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
-                            shape = RoundedCornerShape(24.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
-                            shadowElevation = 4.dp
-                        ) {
+                        Surface(modifier = Modifier.align(Alignment.TopCenter).padding(16.dp), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)) {
                             Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilterChip(
-                                    selected = mapFuelType == "Gasolina 95",
-                                    onClick = { mapFuelType = "Gasolina 95" },
-                                    label = { Text("Gasolina 95", fontWeight = FontWeight.Bold) },
-                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primary)
-                                )
-                                FilterChip(
-                                    selected = mapFuelType == "Diésel",
-                                    onClick = { mapFuelType = "Diésel" },
-                                    label = { Text("Diésel", fontWeight = FontWeight.Bold) },
-                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primary)
-                                )
+                                FilterChip(selected = mapFuelType == "Gasolina 95", onClick = { mapFuelType = "Gasolina 95" }, label = { Text("95") })
+                                FilterChip(selected = mapFuelType == "Diésel", onClick = { mapFuelType = "Diésel" }, label = { Text("Diésel") })
+                                FilterChip(selected = mapFuelType == "Eléctrico", onClick = { mapFuelType = "Eléctrico" }, label = { Text("Eléctrico", color = if (mapFuelType == "Eléctrico") Color(0xFF00BCD4) else Color.Unspecified) })
                             }
                         }
                     }
@@ -387,12 +305,13 @@ fun FuelPricesScreen() {
 fun GasStationCard(station: GasStationData, highlightedSort: String) {
     val context = LocalContext.current
     val brandColor = getBrandColor(station.brand)
+    val isElectricOnly = station.priceElectric > 0 && station.price95 == 0.0
 
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(brandColor.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.LocalGasStation, "", tint = brandColor)
+                    Icon(if (isElectricOnly) Icons.Default.ElectricalServices else Icons.Default.LocalGasStation, "", tint = brandColor)
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -401,38 +320,28 @@ fun GasStationCard(station: GasStationData, highlightedSort: String) {
                     Text("A $distStr de ti", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(
-                    onClick = {
-                        val gmmIntentUri = Uri.parse("google.navigation:q=${station.lat},${station.lon}")
-                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri).apply { setPackage("com.google.android.apps.maps") }
-                        try { context.startActivity(mapIntent) } catch (e: ActivityNotFoundException) {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com/?daddr=${station.lat},${station.lon}")))
-                        }
-                    },
+                    onClick = { try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=${station.lat},${station.lon}")).apply { setPackage("com.google.android.apps.maps") }) } catch (e: Exception) {} },
                     modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape)
-                ) {
-                    Icon(Icons.Default.Navigation, "Navegar", tint = MaterialTheme.colorScheme.primary)
-                }
+                ) { Icon(Icons.Default.Navigation, "", tint = MaterialTheme.colorScheme.primary) }
             }
-
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
             Spacer(modifier = Modifier.height(12.dp))
-
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                if (station.price95 > 0.0) PriceTag("Gasolina 95", station.price95, highlightedSort == "Gasolina 95")
-                if (station.price98 > 0.0) PriceTag("Gasolina 98", station.price98, highlightedSort == "Gasolina 98")
-                if (station.priceDiesel > 0.0) PriceTag("Diésel", station.priceDiesel, highlightedSort == "Diésel")
+                if (station.price95 > 0.0) PriceTag("Gasolina 95", "${station.price95}€", highlightedSort == "Gasolina 95", false, station.price95)
+                if (station.priceDiesel > 0.0) PriceTag("Diésel", "${station.priceDiesel}€", highlightedSort == "Diésel", false, station.priceDiesel)
+                if (station.priceElectric > 0.0) PriceTag("Recarga", "${station.priceElectric}€/kWh", highlightedSort == "Eléctrico", true, station.priceElectric)
             }
         }
     }
 }
 
 @Composable
-fun PriceTag(type: String, price: Double, isHighlighted: Boolean) {
-    val priceColor = getPriceColor(price)
+fun PriceTag(type: String, priceStr: String, isHighlighted: Boolean, isElectric: Boolean, priceVal: Double) {
+    val priceColor = getPriceColor(priceVal, isElectric)
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = if (isHighlighted) Modifier.background(priceColor.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).padding(8.dp) else Modifier.padding(8.dp)) {
         Text(type, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(4.dp))
-        Text("${price}€", style = MaterialTheme.typography.titleMedium, color = priceColor, fontWeight = FontWeight.ExtraBold)
+        Text(priceStr, style = MaterialTheme.typography.titleMedium, color = priceColor, fontWeight = FontWeight.ExtraBold)
     }
 }

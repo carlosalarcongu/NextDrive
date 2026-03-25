@@ -12,7 +12,10 @@ data class Vehicle(
     val isDailyUse: Boolean = true, val isSecondHand: Boolean = true, val type: String = "Turismo",
     val isFavorite: Boolean = false, val licensePlate: String? = null, val vin: String? = null,
     val imageUri: String? = null, val nickname: String? = null, val engineName: String? = null,
-    val horsepower: Int? = null, val colorHex: String? = null
+    val horsepower: Int? = null, val colorHex: String? = null,
+
+    // NUEVO: Para la papelera
+    val isDeleted: Boolean = false
 )
 
 @Entity(tableName = "expenses", foreignKeys = [ForeignKey(entity = Vehicle::class, parentColumns = ["id"], childColumns = ["vehicleId"], onDelete = ForeignKey.CASCADE)])
@@ -27,7 +30,11 @@ data class Expense(
     val laborCost: Double? = null, val partsCost: Double? = null,
     val isItemized: Boolean = false, val workshop: String? = null,
     val attachedDocumentsUris: String? = null,
-    val registeredKm: Int? = null
+    val registeredKm: Int? = null,
+
+    // NUEVO: Para la papelera y el control de tareas en la pantalla Próximos
+    val isDeleted: Boolean = false,
+    val isAttended: Boolean = false
 )
 
 @Entity(tableName = "document_folders", foreignKeys = [ForeignKey(entity = Vehicle::class, parentColumns = ["id"], childColumns = ["vehicleId"], onDelete = ForeignKey.CASCADE)])
