@@ -18,6 +18,13 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/LICENSE.md"
+            excludes += "META-INF/LICENSE-notice.md"
+        }
+    }
 
     buildTypes {
         release {
@@ -34,6 +41,9 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -66,4 +76,15 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
 
     implementation("org.osmdroid:osmdroid-android:6.1.18")
+
+
+    // Robolectric (Test Local)
+    testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("androidx.test.ext:junit-ktx:1.1.5")
+
+    // Espresso, Compose Tests y MockK (Test Instrumentado)
+    androidTestImplementation("androidx.test.espresso:espresso-intents:3.5.1")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("io.mockk:mockk-android:1.13.10") // ¡Faltaba esta!
+    debugImplementation("androidx.compose.ui:ui-test-manifest") // Necesario para aislar Compose en tests
 }
