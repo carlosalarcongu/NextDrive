@@ -4,16 +4,9 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 
-val MIGRATION_10_11 = object : Migration(10, 11) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE expenses ADD COLUMN registeredKm INTEGER")
-    }
-}
-
-@Database(entities = [Vehicle::class, Expense::class, Document::class, DocumentFolder::class], version = 11, exportSchema = false)
+// Subimos la versión a 12 y añadimos ServiceInterval::class
+@Database(entities = [Vehicle::class, Expense::class, Document::class, DocumentFolder::class, ServiceInterval::class], version = 12, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun nextDriveDao(): NextDriveDao
     companion object {
@@ -21,7 +14,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "nextdrive_local_database")
-                    .addMigrations(MIGRATION_10_11).fallbackToDestructiveMigration().build()
+                    .fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }

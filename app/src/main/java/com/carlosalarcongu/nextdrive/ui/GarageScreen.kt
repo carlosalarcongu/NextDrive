@@ -3,15 +3,20 @@ package com.carlosalarcongu.nextdrive.ui
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddRoad
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,8 +24,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -66,25 +73,80 @@ fun VehicleImageLoader(vehicle: Vehicle, modifier: Modifier = Modifier) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun GarageScreen(viewModel: NextDriveViewModel, onNavigateToAddVehicle: () -> Unit, onVehicleClick: (Long) -> Unit, onNavigateToUserGuide: () -> Unit) {
+fun GarageScreen(
+    viewModel: NextDriveViewModel,
+    onNavigateToAddVehicle: () -> Unit,
+    onNavigateToEditVehicle: (Long) -> Unit,
+    onVehicleClick: (Long) -> Unit,
+    onNavigateToSettings: () -> Unit
+) {
     val vehicles by viewModel.allVehicles.collectAsState()
+    val haptic = LocalHapticFeedback.current
 
     var quickKmVehicle by remember { mutableStateOf<Vehicle?>(null) }
     var quickKmTab by remember { mutableStateOf("SUMAR") }
     var quickKmInput by remember { mutableStateOf("") }
 
+    // Estado para el Long Press
+    var selectedVehicleId by remember { mutableStateOf<Long?>(null) }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text("MI GARAJE", fontWeight = FontWeight.Bold) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
-        floatingActionButton = { FloatingActionButton(onClick = onNavigateToAddVehicle, containerColor = MaterialTheme.colorScheme.primary) { Icon(Icons.Default.Add, "Añadir") } }
+        topBar = {
+            Surface(shadowElevation = 4.dp) { // SOMBRA AÑADIDA
+                if (selectedVehicleId != null) {
+                    TopAppBar(
+                        title = { Text("1 seleccionado") },
+                        navigationIcon = { IconButton(onClick = { selectedVehicleId = null }) { Icon(Icons.Default.Close, "Cancelar") } },
+                        actions = {
+                            IconButton(onClick = { onNavigateToEditVehicle(selectedVehicleId!!); selectedVehicleId = null }) { Icon(Icons.Default.Edit, "Editar") }
+                            IconButton(onClick = {
+                                val v = vehicles.find { it.id == selectedVehicleId }
+                                if (v != null) viewModel.softDeleteVehicle(v)
+                                selectedVehicleId = null
+                            }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    )
+                } else {
+                    TopAppBar(
+                        title = { Text("MI GARAJE", fontWeight = FontWeight.Bold) },
+                        actions = {
+                            IconButton(onClick = onNavigateToAddVehicle) { Icon(Icons.Default.Add, "Añadir") }
+                            IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Ajustes") }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                    )
+                }
+            }
+        }
+        // FAB ELIMINADO
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(vehicles) { vehicle ->
-                    Card(modifier = Modifier.fillMaxWidth().clickable { onVehicleClick(vehicle.id) }, elevation = CardDefaults.cardElevation(defaultElevation = 4.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                    val isSelected = selectedVehicleId == vehicle.id
+                    val elevation = if (isSelected) 8.dp else 4.dp
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth().combinedClickable(
+                            onClick = {
+                                if (selectedVehicleId != null) {
+                                    selectedVehicleId = if (selectedVehicleId == vehicle.id) null else vehicle.id
+                                } else {
+                                    onVehicleClick(vehicle.id)
+                                }
+                            },
+                            onLongClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                selectedVehicleId = vehicle.id
+                            }
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
+                        colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
                         Column {
-                            // CORRECCIÓN DEL TRY-CATCH: Sacamos MaterialTheme fuera
                             val defaultBg = MaterialTheme.colorScheme.background
                             val boxColor = remember(vehicle.colorHex, defaultBg) {
                                 try {

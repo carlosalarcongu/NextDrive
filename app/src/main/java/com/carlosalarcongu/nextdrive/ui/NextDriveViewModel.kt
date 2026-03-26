@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import com.carlosalarcongu.nextdrive.data.DocumentFolder
+import com.carlosalarcongu.nextdrive.data.ServiceInterval
 
 data class DatabaseBackup(
     val vehicles: List<Vehicle>,
@@ -112,6 +113,12 @@ class NextDriveViewModel(private val dao: NextDriveDao) : ViewModel() {
                 onResult(false)
             }
         }
+    }
+
+    // --- INTERVALOS PERSONALIZADOS ---
+    fun getServiceIntervalsForVehicle(vehicleId: Long): Flow<List<ServiceInterval>> = dao.getServiceIntervalsForVehicle(vehicleId)
+    fun saveServiceInterval(interval: ServiceInterval) = viewModelScope.launch(Dispatchers.IO) {
+        if (interval.id == 0L) dao.insertServiceInterval(interval) else dao.updateServiceInterval(interval)
     }
 
     fun updateDocument(document: Document) = viewModelScope.launch(Dispatchers.IO) { dao.updateDocument(document) }

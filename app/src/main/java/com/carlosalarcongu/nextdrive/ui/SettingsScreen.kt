@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,7 +30,9 @@ fun SettingsScreen(
     viewModel: NextDriveViewModel,
     themeMode: String, colorPalette: String, fontSize: String,
     unitDist: String, unitCurr: String, unitVol: String, dateFormat: String,
-    onUpdatePref: (String, String) -> Unit
+    onUpdatePref: (String, String) -> Unit,
+    onNavigateToUserGuide: () -> Unit,
+    onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -60,7 +63,16 @@ fun SettingsScreen(
         }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("AJUSTES", fontWeight = FontWeight.Bold) }) }) { padding ->
+    Scaffold(
+        topBar = {
+            Surface(shadowElevation = 4.dp) {
+                TopAppBar(
+                    title = { Text("AJUSTES", fontWeight = FontWeight.Bold) },
+                    navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }
+                )
+            }
+        }
+    ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState())) {
 
             SettingsSectionTitle("Datos y Privacidad", Icons.Default.Storage)
@@ -83,6 +95,7 @@ fun SettingsScreen(
             SettingsDropdown("Formato Fecha", listOf("Sistema", "dd/mm/yyyy", "mm/dd/yyyy", "dd/mm/yy"), dateFormat) { onUpdatePref("dateFormat", it) }
 
             SettingsSectionTitle("Comunidad y Mejoras", Icons.Default.Share)
+            SettingsListItem("Guía de Usuario", "Aprende a exprimir NextDrive") { onNavigateToUserGuide() }
             SettingsListItem("Compartir Aplicación", "Recomienda NextDrive a un amigo") {
                 val sendIntent = Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_TEXT, "¡Prueba NextDrive para gestionar tu coche! https://github.com/carlosalarcongu/NextDrive.git"); type = "text/plain" }
                 context.startActivity(Intent.createChooser(sendIntent, "Compartir vía..."))

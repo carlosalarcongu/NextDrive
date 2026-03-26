@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -135,7 +136,7 @@ fun createPriceMarkerDrawable(context: Context, priceText: String, priceValue: D
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FuelPricesScreen() {
+fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
     val context = LocalContext.current
     var viewMode by remember { mutableStateOf("LISTA") }
     var sortBy by remember { mutableStateOf("Gasolina 95") }
@@ -223,7 +224,17 @@ fun FuelPricesScreen() {
         filtered.sortedBy { when(sortBy) { "Eléctrico"->it.priceElectric; "Gasolina 98"->it.price98; "Diésel"->it.priceDiesel; else->it.price95 } }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("ESTACIONES CERCANAS", fontWeight = FontWeight.Bold) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) }) { paddingValues ->
+    Scaffold(
+        topBar = {
+            Surface(shadowElevation = 4.dp) {
+                TopAppBar(
+                    title = { Text("ESTACIONES CERCANAS", fontWeight = FontWeight.Bold) },
+                    actions = { IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Ajustes") } },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                )
+            }
+        }
+    ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             TabRow(selectedTabIndex = if (viewMode == "LISTA") 0 else 1) {
                 Tab(selected = viewMode == "LISTA", onClick = { viewMode = "LISTA" }, text = { Text("LISTADO", fontWeight = FontWeight.Bold) }, icon = { Icon(Icons.Default.FormatListBulleted, "") })

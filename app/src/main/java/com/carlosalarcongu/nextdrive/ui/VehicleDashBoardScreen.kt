@@ -23,7 +23,8 @@ import androidx.compose.ui.unit.dp
 fun VehicleDashboardScreen(
     vehicleId: Long, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit,
     onNavigateToEdit: (Long) -> Unit, onNavigateToDocuments: (Long) -> Unit,
-    onNavigateToAdd: (Long, String) -> Unit, onNavigateToEditExpense: (Long, String, Long) -> Unit
+    onNavigateToAdd: (Long, String) -> Unit, onNavigateToEditExpense: (Long, String, Long) -> Unit,
+    onNavigateToSettingsIntervals: (Long) -> Unit
 ) {
     val vehicle by viewModel.getVehicleById(vehicleId).collectAsState(initial = null)
     val expenses by viewModel.getExpensesForVehicle(vehicleId).collectAsState(initial = emptyList())
@@ -64,7 +65,6 @@ fun VehicleDashboardScreen(
                         FabMenuItem("Avería", Icons.Default.CarCrash) { onNavigateToAdd(vehicleId, "Avería"); isFabExpanded = false }
                         FabMenuItem("Mantenimiento", Icons.Default.Handyman) { onNavigateToAdd(vehicleId, "Mantenimiento"); isFabExpanded = false }
                         FabMenuItem("Repostaje", Icons.Default.LocalGasStation) { onNavigateToAdd(vehicleId, "Repostaje"); isFabExpanded = false }
-                        FabMenuItem("Pieza", Icons.Default.Build) { onNavigateToAdd(vehicleId, "Pieza"); isFabExpanded = false }
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                     FloatingActionButton(onClick = { isFabExpanded = !isFabExpanded }, containerColor = MaterialTheme.colorScheme.primary) {
@@ -88,6 +88,11 @@ fun VehicleDashboardScreen(
             item {
                 Button(onClick = { onNavigateToDocuments(vehicleId) }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
                     Icon(Icons.Default.Folder, ""); Spacer(Modifier.width(8.dp)); Text("DOCUMENTACIÓN Y PAPELES", fontWeight = FontWeight.Bold)
+                }
+            }
+            item {
+                OutlinedButton(onClick = { onNavigateToSettingsIntervals(vehicleId) }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(8.dp)) {
+                    Icon(Icons.Default.SettingsSuggest, ""); Spacer(Modifier.width(8.dp)); Text("Personalizar programaciones de atenciones", fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -118,7 +123,6 @@ fun VehicleDashboardScreen(
                         if (isSelected) {
                             Icon(Icons.Default.CheckCircle, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                         } else {
-                            // ¡CORRECCIÓN! Usamos el nuevo nombre único
                             val icon = DashboardIconMap[expense.iconName] ?: Icons.Default.Build
                             Icon(icon, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                         }
@@ -162,7 +166,6 @@ private fun FabMenuItem(title: String, icon: androidx.compose.ui.graphics.vector
 
 private fun getCategoryColor(category: String): androidx.compose.ui.graphics.Color {
     val baseColor = when (category) {
-        "Pieza" -> androidx.compose.ui.graphics.Color.Gray
         "Repostaje" -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
         "Mantenimiento" -> androidx.compose.ui.graphics.Color(0xFFFF9800)
         "Avería" -> androidx.compose.ui.graphics.Color(0xFFF44336)
@@ -172,7 +175,6 @@ private fun getCategoryColor(category: String): androidx.compose.ui.graphics.Col
     return baseColor.copy(alpha = 0.15f)
 }
 
-// ¡CAMBIADO EL NOMBRE A DASHBOARD ICON MAP!
 private val DashboardIconMap = mapOf(
     "Herramientas" to Icons.Default.Build,
     "Reparación" to Icons.Default.CarCrash,

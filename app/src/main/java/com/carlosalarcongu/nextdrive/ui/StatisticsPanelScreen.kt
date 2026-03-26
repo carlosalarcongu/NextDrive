@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.Alignment
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -23,7 +24,8 @@ fun StatisticsPanelScreen(
     vehicleId: Long?,
     viewModel: NextDriveViewModel,
     onNavigateBack: () -> Unit,
-    onNavigateToForecast: () -> Unit // NUEVO: Acción para navegar a la estimación
+    onNavigateToForecast: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
     // Si vehicleId es null, cogemos TODOS los gastos. Si no, solo los del coche.
     val allExp by viewModel.allExpenses.collectAsState()
@@ -40,12 +42,17 @@ fun StatisticsPanelScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if(vehicleId == null) "ESTADÍSTICAS GLOBALES" else "ESTADÍSTICAS DEL VEHÍCULO") },
-                navigationIcon = {
-                    if(vehicleId != null) IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") }
-                }
-            )
+            Surface(shadowElevation = 4.dp) {
+                TopAppBar(
+                    title = { Text(if(vehicleId == null) "ESTADÍSTICAS GLOBALES" else "ESTADÍSTICAS DEL VEHÍCULO") },
+                    navigationIcon = {
+                        if(vehicleId != null) IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") }
+                    },
+                    actions = {
+                        if(vehicleId == null) IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Ajustes") }
+                    }
+                )
+            }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {

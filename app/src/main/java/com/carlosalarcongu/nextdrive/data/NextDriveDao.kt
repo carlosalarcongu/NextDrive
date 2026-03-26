@@ -52,4 +52,9 @@ interface NextDriveDao {
     // SOFT DELETE MULTIPLE
     @Query("UPDATE expenses SET isDeleted = 1 WHERE id IN (:ids)")
     fun softDeleteExpensesByIds(ids: List<Long>)
+
+    // INTERVALOS PERSONALIZADOS
+    @Query("SELECT * FROM service_intervals WHERE vehicleId = :vehicleId") fun getServiceIntervalsForVehicle(vehicleId: Long): Flow<List<ServiceInterval>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun insertServiceInterval(interval: ServiceInterval): Long
+    @Update fun updateServiceInterval(interval: ServiceInterval)
 }

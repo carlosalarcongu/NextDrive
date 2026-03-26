@@ -14,7 +14,6 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.LocalGasStation
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -29,16 +28,16 @@ sealed class AppScreen {
     object Upcoming : AppScreen()
     object Settings : AppScreen()
     object UserGuide : AppScreen()
-    object Forecast : AppScreen() // NUEVA PANTALLA: Estimación Anual
+    object Forecast : AppScreen()
 
     data class AddEditVehicle(val vehicleId: Long? = null) : AppScreen()
     data class Dashboard(val vehicleId: Long) : AppScreen()
-    data class AddPieza(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
     data class AddRepostaje(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
     data class AddMantenimiento(val vehicleId: Long, val expenseId: Long? = null, val prefillTitle: String? = null) : AppScreen()
     data class AddAveria(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
     data class AddTramite(val vehicleId: Long, val expenseId: Long? = null) : AppScreen()
     data class DocumentPanel(val vehicleId: Long) : AppScreen()
+    data class ServiceIntervals(val vehicleId: Long) : AppScreen() // NUEVO
 }
 
 class MainActivity : ComponentActivity() {
@@ -49,7 +48,6 @@ class MainActivity : ComponentActivity() {
         val sharedPrefs = getSharedPreferences("NextDrivePrefs", Context.MODE_PRIVATE)
 
         setContent {
-            // ESTADOS DE PREFERENCIAS GLOBALES RECUPERADOS
             var themeMode by remember { mutableStateOf(sharedPrefs.getString("theme", "SYSTEM") ?: "SYSTEM") }
             var colorPalette by remember { mutableStateOf(sharedPrefs.getString("palette", "VAMPIRIC") ?: "VAMPIRIC") }
             var fontSize by remember { mutableStateOf(sharedPrefs.getString("fontSize", "MEDIANO") ?: "MEDIANO") }
@@ -69,40 +67,41 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        val mainScreens = listOf(AppScreen.Garage, AppScreen.FuelPrices, AppScreen.StatisticsGlobal, AppScreen.Upcoming, AppScreen.Settings)
+                        val mainScreens = listOf(AppScreen.Garage, AppScreen.FuelPrices, AppScreen.StatisticsGlobal, AppScreen.Upcoming)
                         if (mainScreens.any { it::class == currentScreen::class }) {
                             NavigationBar {
                                 NavigationBarItem(icon = { Icon(Icons.Default.DirectionsCar, "Garaje") }, label = { Text("Garaje", maxLines=1) }, selected = currentScreen is AppScreen.Garage, onClick = { navigateTo(AppScreen.Garage) })
                                 NavigationBarItem(icon = { Icon(Icons.Default.LocalGasStation, "Gas") }, label = { Text("Precios", maxLines=1) }, selected = currentScreen is AppScreen.FuelPrices, onClick = { navigateTo(AppScreen.FuelPrices) })
                                 NavigationBarItem(icon = { Icon(Icons.Default.BarChart, "Stats") }, label = { Text("Gráficas", maxLines=1) }, selected = currentScreen is AppScreen.StatisticsGlobal, onClick = { navigateTo(AppScreen.StatisticsGlobal) })
                                 NavigationBarItem(icon = { Icon(Icons.Default.EventNote, "Próximos") }, label = { Text("Próximos", maxLines=1) }, selected = currentScreen is AppScreen.Upcoming, onClick = { navigateTo(AppScreen.Upcoming) })
-                                NavigationBarItem(icon = { Icon(Icons.Default.Settings, "Ajustes") }, label = { Text("Ajustes", maxLines=1) }, selected = currentScreen is AppScreen.Settings, onClick = { navigateTo(AppScreen.Settings) })
                             }
                         }
                     }
                 ) { innerPadding ->
                     Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                         when (val screen = currentScreen) {
-                            is AppScreen.Garage -> GarageScreen(viewModel, { navigateTo(AppScreen.AddEditVehicle()) }, { navigateTo(AppScreen.Dashboard(it)) }, { navigateTo(AppScreen.UserGuide) })
-                            is AppScreen.FuelPrices -> FuelPricesScreen()
+                            is AppScreen.Garage -> GarageScreen(
+                                viewModel = viewModel,
+                                onNavigateToAddVehicle = { navigateTo(AppScreen.AddEditVehicle()) },
+                                onNavigateToEditVehicle = { id -> navigateTo(AppScreen.AddEditVehicle(id)) },
+                                onVehicleClick = { navigateTo(AppScreen.Dashboard(it)) },
+                                onNavigateToSettings = { navigateTo(AppScreen.Settings) }
+                            )
+                            is AppScreen.FuelPrices -> FuelPricesScreen(onNavigateToSettings = { navigateTo(AppScreen.Settings) })
 
-                            // NUEVA INTEGRACIÓN DE FORECAST
                             is AppScreen.StatisticsGlobal -> StatisticsPanelScreen(
-                                vehicleId = null,
-                                viewModel = viewModel,
-                                onNavigateBack = navigateBack,
-                                onNavigateToForecast = { navigateTo(AppScreen.Forecast) }
+                                vehicleId = null, viewModel = viewModel, onNavigateBack = navigateBack,
+                                onNavigateToForecast = { navigateTo(AppScreen.Forecast) }, onNavigateToSettings = { navigateTo(AppScreen.Settings) }
                             )
-                            is AppScreen.Forecast -> ForecastScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = navigateBack
-                            )
+                            is AppScreen.Forecast -> ForecastScreen(viewModel = viewModel, onNavigateBack = navigateBack)
 
-                            is AppScreen.Upcoming -> UpcomingScreen(viewModel,
+                            is AppScreen.Upcoming -> UpcomingScreen(
+                                viewModel = viewModel,
                                 onAttend = { vId, title -> navigateTo(AppScreen.AddMantenimiento(vId, null, title)) },
                                 onEdit = { vId, eId, cat ->
-                                    when(cat) { "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId, eId)); "Trámites" -> navigateTo(AppScreen.AddTramite(vId, eId)); "Avería" -> navigateTo(AppScreen.AddAveria(vId, eId)); "Pieza" -> navigateTo(AppScreen.AddPieza(vId, eId)); else -> navigateTo(AppScreen.AddMantenimiento(vId, eId)) }
-                                }
+                                    when(cat) { "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId, eId)); "Trámites" -> navigateTo(AppScreen.AddTramite(vId, eId)); "Avería" -> navigateTo(AppScreen.AddAveria(vId, eId)); else -> navigateTo(AppScreen.AddMantenimiento(vId, eId)) }
+                                },
+                                onNavigateToSettings = { navigateTo(AppScreen.Settings) }
                             )
                             is AppScreen.Settings -> SettingsScreen(
                                 viewModel = viewModel,
@@ -119,7 +118,9 @@ class MainActivity : ComponentActivity() {
                                         "unitVol" -> unitVol = value
                                         "dateFormat" -> dateFormat = value
                                     }
-                                }
+                                },
+                                onNavigateToUserGuide = { navigateTo(AppScreen.UserGuide) },
+                                onNavigateBack = navigateBack
                             )
                             is AppScreen.UserGuide -> UserGuideScreen(navigateBack)
                             is AppScreen.AddEditVehicle -> AddVehicleScreen(screen.vehicleId, viewModel, navigateBack)
@@ -128,18 +129,21 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToEdit = { vId -> navigateTo(AppScreen.AddEditVehicle(vId)) },
                                 onNavigateToDocuments = { vId -> navigateTo(AppScreen.DocumentPanel(vId)) },
                                 onNavigateToAdd = { vId, cat ->
-                                    when(cat) { "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId)); "Mantenimiento" -> navigateTo(AppScreen.AddMantenimiento(vId)); "Avería" -> navigateTo(AppScreen.AddAveria(vId)); "Trámites" -> navigateTo(AppScreen.AddTramite(vId)); else -> navigateTo(AppScreen.AddPieza(vId)) }
+                                    when(cat) { "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId)); "Avería" -> navigateTo(AppScreen.AddAveria(vId)); "Trámites" -> navigateTo(AppScreen.AddTramite(vId)); else -> navigateTo(AppScreen.AddMantenimiento(vId)) }
                                 },
                                 onNavigateToEditExpense = { vId, cat, eId ->
-                                    when(cat) { "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId, eId)); "Mantenimiento" -> navigateTo(AppScreen.AddMantenimiento(vId, eId)); "Avería" -> navigateTo(AppScreen.AddAveria(vId, eId)); "Trámites" -> navigateTo(AppScreen.AddTramite(vId, eId)); else -> navigateTo(AppScreen.AddPieza(vId, eId)) }
-                                }
+                                    when(cat) { "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId, eId)); "Avería" -> navigateTo(AppScreen.AddAveria(vId, eId)); "Trámites" -> navigateTo(AppScreen.AddTramite(vId, eId)); else -> navigateTo(AppScreen.AddMantenimiento(vId, eId)) }
+                                },
+                                onNavigateToSettingsIntervals = { vId -> navigateTo(AppScreen.ServiceIntervals(vId)) } // NUEVO
                             )
-                            is AppScreen.AddPieza -> AddPiezaScreen(screen.vehicleId, screen.expenseId, viewModel, navigateBack)
                             is AppScreen.AddRepostaje -> AddRepostajeScreen(screen.vehicleId, screen.expenseId, viewModel, navigateBack)
                             is AppScreen.AddMantenimiento -> AddMantenimientoScreen(screen.vehicleId, screen.expenseId, "Mantenimiento", screen.prefillTitle, viewModel, navigateBack)
                             is AppScreen.AddAveria -> AddMantenimientoScreen(screen.vehicleId, screen.expenseId, "Avería", null, viewModel, navigateBack)
                             is AppScreen.AddTramite -> AddTramiteScreen(screen.vehicleId, screen.expenseId, viewModel, navigateBack)
                             is AppScreen.DocumentPanel -> DocumentPanelScreen(screen.vehicleId, viewModel, navigateBack)
+
+                            // NUEVA PANTALLA AÑADIDA AQUÍ
+                            is AppScreen.ServiceIntervals -> ServiceIntervalsScreen(screen.vehicleId, viewModel, navigateBack)
                         }
                     }
                 }

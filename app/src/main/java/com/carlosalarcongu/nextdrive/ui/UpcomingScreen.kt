@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,7 +24,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UpcomingScreen(viewModel: NextDriveViewModel, onAttend: (Long, String) -> Unit, onEdit: (Long, Long, String) -> Unit) {
+fun UpcomingScreen(viewModel: NextDriveViewModel, onAttend: (Long, String) -> Unit, onEdit: (Long, Long, String) -> Unit, onNavigateToSettings: () -> Unit) {
     val allExpenses by viewModel.allExpenses.collectAsState()
     val allVehicles by viewModel.allVehicles.collectAsState()
 
@@ -34,7 +35,15 @@ fun UpcomingScreen(viewModel: NextDriveViewModel, onAttend: (Long, String) -> Un
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("PRÓXIMOS MANTENIMIENTOS", fontWeight = FontWeight.Bold) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) }
+        topBar = {
+            Surface(shadowElevation = 4.dp) {
+                TopAppBar(
+                    title = { Text("PRÓXIMOS", fontWeight = FontWeight.Bold) },
+                    actions = { IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Ajustes") } },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                )
+            }
+        }
     ) { padding ->
         if (reminders.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -56,33 +65,41 @@ fun UpcomingScreen(viewModel: NextDriveViewModel, onAttend: (Long, String) -> Un
                             }
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // SEMÁFORO VISUAL
-                            if (exp.reminderDateMillis != null) {
-                                val remainingDays = ((exp.reminderDateMillis - System.currentTimeMillis()) / (1000 * 60 * 60 * 24)).toInt()
-                                val statusColor = when {
-                                    remainingDays < 0 -> MaterialTheme.colorScheme.error // Rojo
-                                    remainingDays <= 15 -> Color(0xFFFF9800) // Naranja
-                                    else -> Color(0xFF4CAF50) // Verde
-                                }
-                                val statusText = if (remainingDays < 0) "VENCIDO HACE ${-remainingDays} DÍAS" else "FALTAN $remainingDays DÍAS"
+                            // SEMÁFOROS VISUALES (Ahora muestra ambos si existen)
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                if (exp.reminderDateMillis != null) {
+                                    val remainingDays = ((exp.reminderDateMillis - System.currentTimeMillis()) / (1000 * 60 * 60 * 24)).toInt()
+                                    val statusColor = when {
+                                        remainingDays < 0 -> MaterialTheme.colorScheme.error // Rojo
+                                        remainingDays <= 15 -> Color(0xFFFF9800) // Naranja
+                                        else -> Color(0xFF4CAF50) // Verde
+                                    }
+                                    val statusText = if (remainingDays < 0) "VENCIDO HACE ${-remainingDays} DÍAS" else "FALTAN $remainingDays DÍAS"
 
-                                val targetDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(exp.reminderDateMillis))
-                                Text("Aviso programado para: $targetDate", style = MaterialTheme.typography.bodyMedium)
-                                Box(modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(4.dp)).background(statusColor.copy(alpha = 0.2f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                                    Text(statusText, color = statusColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                    val targetDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(exp.reminderDateMillis))
+                                    Column {
+                                        Text("Aviso programado para: $targetDate", style = MaterialTheme.typography.bodyMedium)
+                                        Box(modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(4.dp)).background(statusColor.copy(alpha = 0.2f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                                            Text(statusText, color = statusColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                        }
+                                    }
                                 }
-                            } else if (exp.reminderKm != null) {
-                                val remainingKm = exp.reminderKm - (vehicle?.currentKm ?: 0)
-                                val statusColor = when {
-                                    remainingKm < 0 -> MaterialTheme.colorScheme.error
-                                    remainingKm <= 1000 -> Color(0xFFFF9800)
-                                    else -> Color(0xFF4CAF50)
-                                }
-                                val statusText = if (remainingKm < 0) "TE HAS PASADO POR ${-remainingKm} KM" else "FALTAN $remainingKm KM"
 
-                                Text("Aviso programado a los: ${exp.reminderKm} km", style = MaterialTheme.typography.bodyMedium)
-                                Box(modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(4.dp)).background(statusColor.copy(alpha = 0.2f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                                    Text(statusText, color = statusColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                if (exp.reminderKm != null) {
+                                    val remainingKm = exp.reminderKm - (vehicle?.currentKm ?: 0)
+                                    val statusColor = when {
+                                        remainingKm < 0 -> MaterialTheme.colorScheme.error
+                                        remainingKm <= 1000 -> Color(0xFFFF9800)
+                                        else -> Color(0xFF4CAF50)
+                                    }
+                                    val statusText = if (remainingKm < 0) "TE HAS PASADO POR ${-remainingKm} KM" else "FALTAN $remainingKm KM"
+
+                                    Column {
+                                        Text("Aviso programado a los: ${exp.reminderKm} km", style = MaterialTheme.typography.bodyMedium)
+                                        Box(modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(4.dp)).background(statusColor.copy(alpha = 0.2f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                                            Text(statusText, color = statusColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                        }
+                                    }
                                 }
                             }
 
@@ -93,7 +110,6 @@ fun UpcomingScreen(viewModel: NextDriveViewModel, onAttend: (Long, String) -> Un
                                     Icon(Icons.Default.Edit, "", modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("MODIFICAR")
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
-                                // BOTÓN DE ATENDER RÁPIDO
                                 Button(onClick = { viewModel.markExpenseAsAttended(exp) }) {
                                     Icon(Icons.Default.Check, "", modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("MARCAR ATENDIDO")
                                 }
