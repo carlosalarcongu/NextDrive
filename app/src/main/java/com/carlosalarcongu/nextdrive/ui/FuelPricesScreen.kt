@@ -258,7 +258,7 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
                 if (isLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { SpeedometerLoader() }
                 } else if (viewMode == "LISTA") {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

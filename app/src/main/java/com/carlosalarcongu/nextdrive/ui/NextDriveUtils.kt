@@ -15,12 +15,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.core.app.NotificationCompat
 import com.carlosalarcongu.nextdrive.MainActivity
 
-// 1. PREFERENCIAS GLOBALES (Para inyectarlas en toda la app y cambiar unidades en vivo)
 data class UserPrefs(
     val unitDist: String = "Kilómetros",
     val unitCurr: String = "Euros (€)",
     val unitVol: String = "Litros",
-    val useVibration: Boolean = true
+    val useVibration: Boolean = true,
+    val dashboardOrder: String = "INFO,DOCS,INTERVALS,EXPENSES" // NUEVO: Orden del panel
 )
 
 val LocalUserPrefs = staticCompositionLocalOf<UserPrefs> { error("Preferencias no proveídas") }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -38,35 +39,56 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+enum class DashboardModule { INFO_PARKING, DOCS, INTERVALS, EXPENSES }
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun VehicleDashboardScreen(
     vehicleId: Long, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit,
     onNavigateToEdit: (Long) -> Unit, onNavigateToDocuments: (Long) -> Unit,
     onNavigateToAdd: (Long, String) -> Unit, onNavigateToEditExpense: (Long, String, Long) -> Unit,
-    onNavigateToSettingsIntervals: (Long) -> Unit
+    onNavigateToSettingsIntervals: (Long) -> Unit,
+    onUpdateDashboardOrder: (String) -> Unit // NUEVO: Callback de orden
 ) {
     val context = LocalContext.current
-    val prefs = LocalUserPrefs.current // PREFERENCIAS INYECTADAS
+    val prefs = LocalUserPrefs.current
     val vehicle by viewModel.getVehicleById(vehicleId).collectAsState(initial = null)
     val expenses by viewModel.getExpensesForVehicle(vehicleId).collectAsState(initial = emptyList())
     val haptic = LocalHapticFeedback.current
-    var isFabExpanded by remember { mutableStateOf(false) }
 
+    var isFabExpanded by remember { mutableStateOf(false) }
     var selectedExpenseIds by remember { mutableStateOf(setOf<Long>()) }
 
-    // ESTADO: Localizador Aparcamiento
+    // ESTADO: Modularidad
+    var isEditingLayout by remember { mutableStateOf(false) }
+    var moduleOrder by remember {
+        mutableStateOf(
+            prefs.dashboardOrder.split(",").mapNotNull {
+                try { DashboardModule.valueOf(it) } catch(e: Exception) { null }
+            }.ifEmpty { DashboardModule.values().toList() }
+        )
+    }
+
     var showParkingDialog by remember { mutableStateOf(false) }
     var parkingMinutes by remember { mutableStateOf("") }
 
     val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
     val alarmManager = remember { context.getSystemService(Context.ALARM_SERVICE) as AlarmManager }
-
     val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) showParkingDialog = true else Toast.makeText(context, "Permiso denegado", Toast.LENGTH_SHORT).show()
     }
 
     if (vehicle == null) return
+
+    // FUNCIÓN PARA MOVER MÓDULOS
+    fun moveModule(index: Int, direction: Int) {
+        val newOrder = moduleOrder.toMutableList()
+        val item = newOrder.removeAt(index)
+        newOrder.add(index + direction, item)
+        moduleOrder = newOrder
+        onUpdateDashboardOrder(newOrder.joinToString(","))
+        triggerVibration(context, prefs)
+    }
 
     Scaffold(
         topBar = {
@@ -83,16 +105,25 @@ fun VehicleDashboardScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 )
+            } else if (isEditingLayout) {
+                TopAppBar(
+                    title = { Text("ORGANIZAR PANEL") },
+                    navigationIcon = { IconButton(onClick = { isEditingLayout = false; triggerVibration(context, prefs) }) { Icon(Icons.Default.Check, "Guardar") } },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                )
             } else {
                 TopAppBar(
                     title = { Text(vehicle?.model?.uppercase() ?: "") },
                     navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } },
-                    actions = { IconButton(onClick = { onNavigateToEdit(vehicleId) }) { Icon(Icons.Default.Edit, "") } }
+                    actions = {
+                        IconButton(onClick = { isEditingLayout = true; triggerVibration(context, prefs) }) { Icon(Icons.Default.DashboardCustomize, "Editar Panel") }
+                        IconButton(onClick = { onNavigateToEdit(vehicleId) }) { Icon(Icons.Default.Edit, "Editar Coche") }
+                    }
                 )
             }
         },
         floatingActionButton = {
-            if (selectedExpenseIds.isEmpty()) {
+            if (selectedExpenseIds.isEmpty() && !isEditingLayout) {
                 Column(horizontalAlignment = Alignment.End) {
                     if (isFabExpanded) {
                         FabMenuItem("Trámites", Icons.Default.Assignment) { onNavigateToAdd(vehicleId, "Trámites"); isFabExpanded = false }
@@ -110,121 +141,147 @@ fun VehicleDashboardScreen(
     ) { paddingValues ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(paddingValues), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
-            // 1. CABECERA Y APARCAMIENTO
-            item {
-                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        val displayName = vehicle?.nickname?.takeIf { it.isNotBlank() } ?: "${vehicle?.brand ?: ""} ${vehicle?.model}"
-                        Text(displayName.uppercase(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("ODÓMETRO: ${vehicle?.currentKm ?: "0"} ${prefs.unitDist.take(2).uppercase()} | ${vehicle?.fuelType?.uppercase() ?: "N/D"}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-                        // LÓGICA DE APARCAMIENTO VISUAL
-                        if (vehicle?.parkingLat != null && vehicle?.parkingLon != null) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.LocalParking, "", tint = MaterialTheme.colorScheme.primary)
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Vehículo Aparcado", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                                    if (vehicle?.parkingTimeMillis != null) {
-                                        val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(vehicle!!.parkingTimeMillis!!))
-                                        Text("Ticket hasta las $timeStr", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = {
-                                    viewModel.updateVehicle(vehicle!!.copy(parkingLat = null, parkingLon = null, parkingTimeMillis = null))
-                                    val intent = Intent(context, ParkingReceiver::class.java)
-                                    val pendingIntent = PendingIntent.getBroadcast(context, vehicleId.toInt(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                                    alarmManager.cancel(pendingIntent)
-                                    triggerVibration(context, prefs)
-                                }, modifier = Modifier.weight(1f)) { Text("Liberar") }
-
-                                Button(onClick = {
-                                    val uriStr = "google.navigation:q=${vehicle!!.parkingLat},${vehicle!!.parkingLon}&mode=w"
-                                    val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply { setPackage("com.google.android.apps.maps") }
-                                    try { context.startActivity(mapIntent) } catch (e: Exception) {}
-                                }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.DirectionsWalk, ""); Spacer(Modifier.width(8.dp)); Text("Ir al coche") }
-                            }
-                        } else {
-                            OutlinedButton(onClick = {
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                                    showParkingDialog = true
-                                } else {
-                                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                                }
-                            }, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.LocationOn, ""); Spacer(Modifier.width(8.dp)); Text("He aparcado aquí")
+            if (isEditingLayout) {
+                item { Text("Usa las flechas para reordenar las secciones de tu panel.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                itemsIndexed(moduleOrder) { index, module ->
+                    val moduleName = when(module) {
+                        DashboardModule.INFO_PARKING -> "Información y Aparcamiento"
+                        DashboardModule.DOCS -> "Documentos"
+                        DashboardModule.INTERVALS -> "Programaciones"
+                        DashboardModule.EXPENSES -> "Historial de Gastos"
+                    }
+                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(moduleName, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            Row {
+                                IconButton(onClick = { moveModule(index, -1) }, enabled = index > 0) { Icon(Icons.Default.KeyboardArrowUp, "Subir") }
+                                IconButton(onClick = { moveModule(index, 1) }, enabled = index < moduleOrder.size - 1) { Icon(Icons.Default.KeyboardArrowDown, "Bajar") }
                             }
                         }
                     }
                 }
-            }
+            } else {
+                // RENDERIZADO DINÁMICO SEGÚN EL ORDEN
+                moduleOrder.forEach { module ->
+                    when (module) {
+                        DashboardModule.INFO_PARKING -> {
+                            item {
+                                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        val displayName = vehicle?.nickname?.takeIf { it.isNotBlank() } ?: "${vehicle?.brand ?: ""} ${vehicle?.model}"
+                                        Text(displayName.uppercase(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text("ODÓMETRO: ${vehicle?.currentKm ?: "0"} ${prefs.unitDist.take(2).uppercase()} | ${vehicle?.fuelType?.uppercase() ?: "N/D"}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
 
-            // 2. BOTONES DE GESTIÓN
-            item {
-                Button(onClick = { onNavigateToDocuments(vehicleId) }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
-                    Icon(Icons.Default.Folder, ""); Spacer(Modifier.width(8.dp)); Text("DOCUMENTACIÓN Y PAPELES", fontWeight = FontWeight.Bold)
-                }
-            }
-            item {
-                OutlinedButton(onClick = { onNavigateToSettingsIntervals(vehicleId) }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(8.dp)) {
-                    Icon(Icons.Default.SettingsSuggest, ""); Spacer(Modifier.width(8.dp)); Text("Personalizar atenciones", fontWeight = FontWeight.Bold)
-                }
-            }
+                                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-            item { Text("HISTORIAL DE GASTOS", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp)) }
+                                        if (vehicle?.parkingLat != null && vehicle?.parkingLon != null) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                                                    Icon(Icons.Default.LocalParking, "", tint = MaterialTheme.colorScheme.primary)
+                                                }
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text("Vehículo Aparcado", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                                                    if (vehicle?.parkingTimeMillis != null) {
+                                                        val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(vehicle!!.parkingTimeMillis!!))
+                                                        Text("Ticket hasta las $timeStr", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                                    }
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                OutlinedButton(onClick = {
+                                                    viewModel.updateVehicle(vehicle!!.copy(parkingLat = null, parkingLon = null, parkingTimeMillis = null))
+                                                    val intent = Intent(context, ParkingReceiver::class.java)
+                                                    val pendingIntent = PendingIntent.getBroadcast(context, vehicleId.toInt(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                                                    alarmManager.cancel(pendingIntent)
+                                                    triggerVibration(context, prefs)
+                                                }, modifier = Modifier.weight(1f)) { Text("Liberar") }
 
-            // 3. LISTA DE GASTOS
-            items(expenses) { expense ->
-                val isSelected = selectedExpenseIds.contains(expense.id)
-                val cardColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else getCategoryColor(expense.category)
-
-                Card(
-                    modifier = Modifier.fillMaxWidth().combinedClickable(
-                        onClick = {
-                            if (selectedExpenseIds.isNotEmpty()) {
-                                selectedExpenseIds = if (isSelected) selectedExpenseIds - expense.id else selectedExpenseIds + expense.id
-                                triggerVibration(context, prefs)
-                            } else {
-                                onNavigateToEditExpense(vehicleId, expense.category, expense.id)
+                                                Button(onClick = {
+                                                    val uriStr = "google.navigation:q=${vehicle!!.parkingLat},${vehicle!!.parkingLon}&mode=w"
+                                                    val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply { setPackage("com.google.android.apps.maps") }
+                                                    try { context.startActivity(mapIntent) } catch (e: Exception) {}
+                                                }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.DirectionsWalk, ""); Spacer(Modifier.width(8.dp)); Text("Ir al coche") }
+                                            }
+                                        } else {
+                                            OutlinedButton(onClick = {
+                                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                                                    showParkingDialog = true
+                                                } else {
+                                                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                                }
+                                            }, modifier = Modifier.fillMaxWidth()) {
+                                                Icon(Icons.Default.LocationOn, ""); Spacer(Modifier.width(8.dp)); Text("He aparcado aquí")
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                        },
-                        onLongClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedExpenseIds = if (isSelected) selectedExpenseIds - expense.id else selectedExpenseIds + expense.id
                         }
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 8.dp else 2.dp),
-                    colors = CardDefaults.cardColors(containerColor = cardColor)
-                ) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (isSelected) {
-                            Icon(Icons.Default.CheckCircle, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
-                        } else {
-                            val icon = DashboardIconMap[expense.iconName] ?: Icons.Default.Build
-                            Icon(icon, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                        DashboardModule.DOCS -> {
+                            item {
+                                Button(onClick = { onNavigateToDocuments(vehicleId) }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
+                                    Icon(Icons.Default.Folder, ""); Spacer(Modifier.width(8.dp)); Text("DOCUMENTACIÓN Y PAPELES", fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(expense.title.uppercase(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            Text(expense.category, style = MaterialTheme.typography.bodySmall)
+                        DashboardModule.INTERVALS -> {
+                            item {
+                                OutlinedButton(onClick = { onNavigateToSettingsIntervals(vehicleId) }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(8.dp)) {
+                                    Icon(Icons.Default.SettingsSuggest, ""); Spacer(Modifier.width(8.dp)); Text("Personalizar atenciones", fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
-                        // UNIDADES DINÁMICAS (Si es USD usamos $, si es EUR usamos €)
-                        val currSymbol = if (prefs.unitCurr.contains("$")) "$" else "€"
-                        Text("${expense.totalCost} $currSymbol", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        DashboardModule.EXPENSES -> {
+                            item { Text("HISTORIAL DE GASTOS", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
+                            items(expenses) { expense ->
+                                val isSelected = selectedExpenseIds.contains(expense.id)
+                                val cardColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else getCategoryColor(expense.category)
+
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().combinedClickable(
+                                        onClick = {
+                                            if (selectedExpenseIds.isNotEmpty()) {
+                                                selectedExpenseIds = if (isSelected) selectedExpenseIds - expense.id else selectedExpenseIds + expense.id
+                                                triggerVibration(context, prefs)
+                                            } else {
+                                                onNavigateToEditExpense(vehicleId, expense.category, expense.id)
+                                            }
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            selectedExpenseIds = if (isSelected) selectedExpenseIds - expense.id else selectedExpenseIds + expense.id
+                                        }
+                                    ),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 8.dp else 2.dp),
+                                    colors = CardDefaults.cardColors(containerColor = cardColor)
+                                ) {
+                                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        if (isSelected) {
+                                            Icon(Icons.Default.CheckCircle, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                                        } else {
+                                            val icon = DashboardIconMap[expense.iconName] ?: Icons.Default.Build
+                                            Icon(icon, "", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                                        }
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(expense.title.uppercase(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                            Text(expense.category, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        val currSymbol = if (prefs.unitCurr.contains("$")) "$" else "€"
+                                        Text("${expense.totalCost} $currSymbol", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // DIÁLOGO DE APARCAMIENTO Y ALARMA
+        // DIÁLOGO DE APARCAMIENTO
         if (showParkingDialog) {
             AlertDialog(
                 onDismissRequest = { showParkingDialog = false; parkingMinutes = "" },
@@ -251,7 +308,7 @@ fun VehicleDashboardScreen(
                                 triggerVibration(context, prefs)
 
                                 if (expireTime != null) {
-                                    val notifyTime = expireTime - (15 * 60 * 1000) // Avisa 15 min antes
+                                    val notifyTime = expireTime - (15 * 60 * 1000)
                                     if (notifyTime > System.currentTimeMillis()) {
                                         val intent = Intent(context, ParkingReceiver::class.java)
                                         val pendingIntent = PendingIntent.getBroadcast(context, vehicleId.toInt(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

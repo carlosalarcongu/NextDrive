@@ -55,10 +55,12 @@ class MainActivity : ComponentActivity() {
             var unitCurr by remember { mutableStateOf(sharedPrefs.getString("unitCurr", "Euros (€)") ?: "Euros (€)") }
             var unitVol by remember { mutableStateOf(sharedPrefs.getString("unitVol", "Litros") ?: "Litros") }
             var dateFormat by remember { mutableStateOf(sharedPrefs.getString("dateFormat", "Sistema") ?: "Sistema") }
-            var useVibration by remember { mutableStateOf(sharedPrefs.getBoolean("useVibration", true)) } // NUEVO
+
+            var dashboardOrder by remember { mutableStateOf(sharedPrefs.getString("dashboardOrder", "INFO,DOCS,INTERVALS,EXPENSES") ?: "INFO,DOCS,INTERVALS,EXPENSES") }
+            var useVibration by remember { mutableStateOf(sharedPrefs.getBoolean("useVibration", true)) }
 
             // Construimos el objeto de preferencias globales
-            val userPrefs = UserPrefs(unitDist, unitCurr, unitVol, useVibration)
+            val userPrefs = UserPrefs(unitDist, unitCurr, unitVol, useVibration, dashboardOrder)
 
             NextDriveTheme(themeMode = themeMode, palette = colorPalette, fontSizeStr = fontSize) {
                 // INYECTAMOS LAS PREFERENCIAS A TODA LA APP
@@ -146,7 +148,11 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToEditExpense = { vId, cat, eId ->
                                         when(cat) { "Repostaje" -> navigateTo(AppScreen.AddRepostaje(vId, eId)); "Avería" -> navigateTo(AppScreen.AddAveria(vId, eId)); "Trámites" -> navigateTo(AppScreen.AddTramite(vId, eId)); else -> navigateTo(AppScreen.AddMantenimiento(vId, eId)) }
                                     },
-                                    onNavigateToSettingsIntervals = { vId -> navigateTo(AppScreen.ServiceIntervals(vId)) }
+                                    onNavigateToSettingsIntervals = { vId -> navigateTo(AppScreen.ServiceIntervals(vId)) },
+                                    onUpdateDashboardOrder = { newOrder ->
+                                        dashboardOrder = newOrder
+                                        sharedPrefs.edit().putString("dashboardOrder", newOrder).apply()
+                                    }
                                 )
                                 is AppScreen.AddRepostaje -> AddRepostajeScreen(screen.vehicleId, screen.expenseId, viewModel, navigateBack)
                                 is AppScreen.AddMantenimiento -> AddMantenimientoScreen(screen.vehicleId, screen.expenseId, "Mantenimiento", screen.prefillTitle, viewModel, navigateBack)
