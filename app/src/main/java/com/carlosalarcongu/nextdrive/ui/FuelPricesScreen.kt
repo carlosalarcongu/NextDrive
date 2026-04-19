@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,6 +59,9 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.abs
 
 // --- MODELO Y FUNCIONES VISUALES ---
@@ -177,8 +181,20 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
         withContext(Dispatchers.IO) {
             try {
                 isLoading = true
-                val url = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/"
-                val jsonString = URL(url).readText()
+                val sharedPrefs = context.getSharedPreferences("FuelCache", Context.MODE_PRIVATE)
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                val cachedDate = sharedPrefs.getString("date", "")
+                val cachedJson = sharedPrefs.getString("json", "")
+
+                val jsonString = if (cachedDate == today && !cachedJson.isNullOrEmpty()) {
+                    cachedJson // Carga instantánea desde memoria
+                } else {
+                    val url = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/"
+                    val freshJson = URL(url).readText()
+                    sharedPrefs.edit().putString("date", today).putString("json", freshJson).apply()
+                    freshJson
+                }
+
                 val jsonObject = JSONObject(jsonString)
                 val array = jsonObject.getJSONArray("ListaEESSPrecio")
 
@@ -204,10 +220,9 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
                     }
                 }
 
-                // MOCKS DE ELECTROLINERAS (Dado que la API de carburantes no las incluye)
+                // MOCKS DE ELECTROLINERAS
                 fetchedStations.add(GasStationData("Supercharger Tesla", "Tesla", 43.424, -3.829, 0.0, 0.0, 0.0, 0.45, 1200f))
                 fetchedStations.add(GasStationData("Iberdrola Carga Rápida", "Iberdrola", 43.455, -3.830, 0.0, 0.0, 0.0, 0.35, 2500f))
-                fetchedStations.add(GasStationData("Endesa X Way", "Endesa", 43.444, -3.844, 0.0, 0.0, 0.0, 0.39, 3100f))
 
                 stations = fetchedStations
             } catch (e: Exception) { e.printStackTrace() } finally { isLoading = false }
@@ -331,9 +346,14 @@ fun GasStationCard(station: GasStationData, highlightedSort: String) {
                     Text("A $distStr de ti", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(
-                    onClick = { try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=${station.lat},${station.lon}")).apply { setPackage("com.google.android.apps.maps") }) } catch (e: Exception) {} },
+                    onClick = {
+                        // NUEVO INTENT: Muestra la chincheta con el nombre en Maps en lugar de arrancar navegación
+                        val uriStr = "geo:0,0?q=${station.lat},${station.lon}(${Uri.encode(station.name)})"
+                        val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply { setPackage("com.google.android.apps.maps") }
+                        try { context.startActivity(mapIntent) } catch (e: Exception) {}
+                    },
                     modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape)
-                ) { Icon(Icons.Default.Navigation, "", tint = MaterialTheme.colorScheme.primary) }
+                ) { Icon(Icons.Default.Place, "Ver en mapa", tint = MaterialTheme.colorScheme.primary) }
             }
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))

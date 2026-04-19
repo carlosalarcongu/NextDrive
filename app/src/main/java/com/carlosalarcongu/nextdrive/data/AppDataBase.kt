@@ -5,8 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-// Subimos la versión a 12 y añadimos ServiceInterval::class
-@Database(entities = [Vehicle::class, Expense::class, Document::class, DocumentFolder::class, ServiceInterval::class], version = 12, exportSchema = false)
+// Subimos la versión a 13 y añadimos ServiceInterval::class
+@Database(entities = [Vehicle::class, Expense::class, Document::class, DocumentFolder::class, ServiceInterval::class], version = 13, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun nextDriveDao(): NextDriveDao
     companion object {

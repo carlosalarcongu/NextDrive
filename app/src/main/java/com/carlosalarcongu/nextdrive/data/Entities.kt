@@ -13,7 +13,8 @@ data class Vehicle(
     val isFavorite: Boolean = false, val licensePlate: String? = null, val vin: String? = null,
     val imageUri: String? = null, val nickname: String? = null, val engineName: String? = null,
     val horsepower: Int? = null, val colorHex: String? = null,
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false, val parkingLat: Double? = null,
+    val parkingLon: Double? = null, val parkingTimeMillis: Long? = null
 )
 
 @Entity(tableName = "expenses", foreignKeys = [ForeignKey(entity = Vehicle::class, parentColumns = ["id"], childColumns = ["vehicleId"], onDelete = ForeignKey.CASCADE)])

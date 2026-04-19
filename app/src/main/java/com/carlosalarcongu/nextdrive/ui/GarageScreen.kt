@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.AddRoad
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material3.*
@@ -79,9 +80,14 @@ fun GarageScreen(
     viewModel: NextDriveViewModel,
     onNavigateToAddVehicle: () -> Unit,
     onNavigateToEditVehicle: (Long) -> Unit,
+    onNavigateToAddRepostaje: (Long) -> Unit, // NUEVO
     onVehicleClick: (Long) -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
+    val context = LocalContext.current
+    val prefs = LocalUserPrefs.current // PREFERENCIAS GLOBALES
+    val distUnitLabel = if (prefs.unitDist == "Millas") "MI" else "KM"
+
     val vehicles by viewModel.allVehicles.collectAsState()
     val haptic = LocalHapticFeedback.current
 
@@ -89,12 +95,11 @@ fun GarageScreen(
     var quickKmTab by remember { mutableStateOf("SUMAR") }
     var quickKmInput by remember { mutableStateOf("") }
 
-    // Estado para el Long Press
     var selectedVehicleId by remember { mutableStateOf<Long?>(null) }
 
     Scaffold(
         topBar = {
-            Surface(shadowElevation = 4.dp) { // SOMBRA AÑADIDA
+            Surface(shadowElevation = 4.dp) {
                 if (selectedVehicleId != null) {
                     TopAppBar(
                         title = { Text("1 seleccionado") },
@@ -103,7 +108,10 @@ fun GarageScreen(
                             IconButton(onClick = { onNavigateToEditVehicle(selectedVehicleId!!); selectedVehicleId = null }) { Icon(Icons.Default.Edit, "Editar") }
                             IconButton(onClick = {
                                 val v = vehicles.find { it.id == selectedVehicleId }
-                                if (v != null) viewModel.softDeleteVehicle(v)
+                                if (v != null) {
+                                    viewModel.softDeleteVehicle(v)
+                                    triggerVibration(context, prefs)
+                                }
                                 selectedVehicleId = null
                             }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
                         },
@@ -121,7 +129,6 @@ fun GarageScreen(
                 }
             }
         }
-        // FAB ELIMINADO
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -154,8 +161,17 @@ fun GarageScreen(
                                 } catch (e: Exception) { defaultBg }
                             }
 
-                            Box(modifier = Modifier.fillMaxWidth().height(160.dp).background(boxColor), contentAlignment = Alignment.Center) {
-                                VehicleImageLoader(vehicle = vehicle, modifier = Modifier.fillMaxSize())
+                            Box(modifier = Modifier.fillMaxWidth().height(160.dp).background(boxColor)) {
+                                VehicleImageLoader(vehicle = vehicle, modifier = Modifier.fillMaxSize().align(Alignment.Center))
+
+                                // NUEVO: BOTÓN RÁPIDO DE REPOSTAJE
+                                SmallFloatingActionButton(
+                                    onClick = { onNavigateToAddRepostaje(vehicle.id) },
+                                    modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Icon(Icons.Default.LocalGasStation, "Repostaje Rápido", tint = MaterialTheme.colorScheme.onPrimary)
+                                }
                             }
                             Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column(modifier = Modifier.weight(1f)) {
@@ -164,7 +180,7 @@ fun GarageScreen(
                                     if (!vehicle.licensePlate.isNullOrBlank()) Text(text = vehicle.licensePlate, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = "${vehicle.currentKm ?: 0} KM", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Text(text = "${vehicle.currentKm ?: 0} $distUnitLabel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.width(8.dp))
                                     FilledTonalIconButton(onClick = { quickKmVehicle = vehicle }) {
                                         Icon(Icons.Default.AddRoad, "Actualizar KM")
@@ -180,7 +196,7 @@ fun GarageScreen(
         if (quickKmVehicle != null) {
             AlertDialog(
                 onDismissRequest = { quickKmVehicle = null; quickKmInput = "" },
-                title = { Text("Actualizar Kilometraje") },
+                title = { Text("Actualizar Odómetro") },
                 text = {
                     Column {
                         TabRow(selectedTabIndex = if (quickKmTab == "SUMAR") 0 else 1) {
@@ -191,7 +207,7 @@ fun GarageScreen(
                         OutlinedTextField(
                             value = quickKmInput,
                             onValueChange = { quickKmInput = it.filter { c -> c.isDigit() } },
-                            label = { Text(if (quickKmTab == "SUMAR") "¿Cuántos km has hecho?" else "Nuevo cuentakilómetros") },
+                            label = { Text(if (quickKmTab == "SUMAR") "¿Cuántos $distUnitLabel has hecho?" else "Nuevo valor ($distUnitLabel)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -204,6 +220,7 @@ fun GarageScreen(
                         if (input > 0) {
                             val newKm = if (quickKmTab == "SUMAR") (quickKmVehicle!!.currentKm ?: 0) + input else input
                             viewModel.updateVehicle(quickKmVehicle!!.copy(currentKm = newKm))
+                            triggerVibration(context, prefs)
                             quickKmVehicle = null
                             quickKmInput = ""
                         }

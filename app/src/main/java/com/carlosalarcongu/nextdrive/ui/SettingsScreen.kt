@@ -30,11 +30,14 @@ fun SettingsScreen(
     viewModel: NextDriveViewModel,
     themeMode: String, colorPalette: String, fontSize: String,
     unitDist: String, unitCurr: String, unitVol: String, dateFormat: String,
+    useVibration: Boolean, // NUEVO
     onUpdatePref: (String, String) -> Unit,
+    onToggleVibration: (Boolean) -> Unit, // NUEVO
     onNavigateToUserGuide: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val prefs = LocalUserPrefs.current // Preferencias inyectadas para la vibración
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showTrashDialog by remember { mutableStateOf(false) }
@@ -47,6 +50,7 @@ fun SettingsScreen(
             viewModel.exportDatabaseToJson { jsonString ->
                 context.contentResolver.openOutputStream(it)?.use { os -> os.write(jsonString.toByteArray()) }
                 Toast.makeText(context, "Copia de seguridad exportada", Toast.LENGTH_LONG).show()
+                triggerVibration(context, prefs)
             }
         }
     }
@@ -57,7 +61,10 @@ fun SettingsScreen(
                 val inputStream = context.contentResolver.openInputStream(it)
                 val jsonString = BufferedReader(InputStreamReader(inputStream)).use { reader -> reader.readText() }
                 viewModel.importDatabaseFromJson(jsonString) { success ->
-                    if (success) Toast.makeText(context, "Datos restaurados", Toast.LENGTH_LONG).show()
+                    if (success) {
+                        Toast.makeText(context, "Datos restaurados", Toast.LENGTH_LONG).show()
+                        triggerVibration(context, prefs)
+                    }
                 }
             } catch (e: Exception) { Toast.makeText(context, "Error", Toast.LENGTH_SHORT).show() }
         }
@@ -78,7 +85,6 @@ fun SettingsScreen(
             SettingsSectionTitle("Datos y Privacidad", Icons.Default.Storage)
             SettingsListItem("Importar Datos", "Restaura una copia de seguridad JSON") { importLauncher.launch(arrayOf("application/json")) }
             SettingsListItem("Exportar Local", "Guarda en la memoria del dispositivo") { exportLauncher.launch("NextDrive_Backup.json") }
-            // NUEVO: Papelera
             SettingsListItem("Papelera de Reciclaje", "Restaura elementos borrados", MaterialTheme.colorScheme.primary) { showTrashDialog = true }
             SettingsListItem("Borrar Todos los Datos", "Acción destructiva e irreversible", MaterialTheme.colorScheme.error) { showDeleteDialog = true }
             SettingsListItem("Política de Privacidad", "Consulta cómo tratamos (o no) tus datos") { showPrivacyDialog = true }
@@ -87,6 +93,15 @@ fun SettingsScreen(
             SettingsDropdown("Modo", listOf("SYSTEM", "DARK", "LIGHT", "OTRO (Próximamente)"), themeMode) { onUpdatePref("theme", it) }
             SettingsDropdown("Tamaño de Letra", listOf("PEQUEÑO", "MEDIANO", "GRANDE"), fontSize) { onUpdatePref("fontSize", it) }
             SettingsDropdown("Colores", listOf("VAMPIRIC", "FRUTAL", "MONOCROMÁTICO"), colorPalette) { onUpdatePref("palette", it) }
+
+            // NUEVO: TOGGLE DE VIBRACIÓN
+            Row(modifier = Modifier.fillMaxWidth().clickable { onToggleVibration(!useVibration) }.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("Vibraciones Responsivas", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                    Text("Vibrar al realizar acciones", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = useVibration, onCheckedChange = { onToggleVibration(it) })
+            }
 
             SettingsSectionTitle("Unidades de Medida", Icons.Default.Straighten)
             SettingsDropdown("Distancia", listOf("Kilómetros", "Millas"), unitDist) { onUpdatePref("unitDist", it) }
@@ -103,6 +118,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
 
+        // ... (MANTÉN TUS DIÁLOGOS DE PAPELERA Y PRIVACIDAD EXACTAMENTE IGUAL AQUÍ ABAJO)
         if (showTrashDialog) {
             AlertDialog(
                 onDismissRequest = { showTrashDialog = false },
@@ -118,8 +134,8 @@ fun SettingsScreen(
                                 Card {
                                     Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                         Text("🚗 ${v.model}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                        IconButton(onClick = { viewModel.restoreVehicle(v) }) { Icon(Icons.Default.Restore, "Restaurar", tint = MaterialTheme.colorScheme.primary) }
-                                        IconButton(onClick = { viewModel.hardDeleteVehicle(v) }) { Icon(Icons.Default.DeleteForever, "Destruir", tint = MaterialTheme.colorScheme.error) }
+                                        IconButton(onClick = { viewModel.restoreVehicle(v); triggerVibration(context, prefs) }) { Icon(Icons.Default.Restore, "Restaurar", tint = MaterialTheme.colorScheme.primary) }
+                                        IconButton(onClick = { viewModel.hardDeleteVehicle(v); triggerVibration(context, prefs) }) { Icon(Icons.Default.DeleteForever, "Destruir", tint = MaterialTheme.colorScheme.error) }
                                     }
                                 }
                             }
@@ -127,8 +143,8 @@ fun SettingsScreen(
                                 Card {
                                     Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                         Text("🔧 ${e.title} (${e.totalCost}€)", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                        IconButton(onClick = { viewModel.restoreExpense(e) }) { Icon(Icons.Default.Restore, "Restaurar", tint = MaterialTheme.colorScheme.primary) }
-                                        IconButton(onClick = { viewModel.hardDeleteExpense(e) }) { Icon(Icons.Default.DeleteForever, "Destruir", tint = MaterialTheme.colorScheme.error) }
+                                        IconButton(onClick = { viewModel.restoreExpense(e); triggerVibration(context, prefs) }) { Icon(Icons.Default.Restore, "Restaurar", tint = MaterialTheme.colorScheme.primary) }
+                                        IconButton(onClick = { viewModel.hardDeleteExpense(e); triggerVibration(context, prefs) }) { Icon(Icons.Default.DeleteForever, "Destruir", tint = MaterialTheme.colorScheme.error) }
                                     }
                                 }
                             }
@@ -138,13 +154,13 @@ fun SettingsScreen(
                 confirmButton = { TextButton(onClick = { showTrashDialog = false }) { Text("Cerrar") } },
                 dismissButton = {
                     if (deletedVehicles.isNotEmpty() || deletedExpenses.isNotEmpty()) {
-                        TextButton(onClick = { viewModel.emptyTrash() }) { Text("Vaciar Todo", color = MaterialTheme.colorScheme.error) }
+                        TextButton(onClick = { viewModel.emptyTrash(); triggerVibration(context, prefs) }) { Text("Vaciar Todo", color = MaterialTheme.colorScheme.error) }
                     }
                 }
             )
         }
         if (showPrivacyDialog) { AlertDialog(onDismissRequest = { showPrivacyDialog = false }, title = { Text("Política de Privacidad") }, text = { Text("NextDrive es una aplicación de gestión local...") }, confirmButton = { TextButton(onClick = { showPrivacyDialog = false }) { Text("Entendido") } }) }
-        if (showDeleteDialog) { AlertDialog(onDismissRequest = { showDeleteDialog = false }, title = { Text("¿BORRAR TODO?") }, text = { Text("Se eliminará todo tu garaje y gastos de forma irreversible.") }, confirmButton = { Button(onClick = { viewModel.deleteAllData(); showDeleteDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("BORRAR") } }, dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancelar") } }) }
+        if (showDeleteDialog) { AlertDialog(onDismissRequest = { showDeleteDialog = false }, title = { Text("¿BORRAR TODO?") }, text = { Text("Se eliminará todo tu garaje y gastos de forma irreversible.") }, confirmButton = { Button(onClick = { viewModel.deleteAllData(); showDeleteDialog = false; triggerVibration(context, prefs) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("BORRAR") } }, dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancelar") } }) }
     }
 }
 

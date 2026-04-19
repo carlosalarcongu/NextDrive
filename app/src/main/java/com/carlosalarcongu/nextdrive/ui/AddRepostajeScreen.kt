@@ -40,23 +40,26 @@ fun AddRepostajeScreen(vehicleId: Long, expenseId: Long? = null, viewModel: Next
         Column(modifier = Modifier.padding(paddingValues).padding(16.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Nombre (Ej: Repostaje Repsol)") }, modifier = Modifier.fillMaxWidth())
 
-            // AUTOCOMPLETADO MATEMÁTICO
+            // LÓGICA OMNIDIRECCIONAL
             OutlinedTextField(value = pricePerLiter, onValueChange = {
                 pricePerLiter = it.replace(",", ".")
-                val p = pricePerLiter.toDoubleOrNull(); val l = liters.toDoubleOrNull()
+                val p = pricePerLiter.toDoubleOrNull(); val l = liters.toDoubleOrNull(); val t = totalCost.toDoubleOrNull()
                 if (p != null && l != null) totalCost = "%.2f".format(Locale.US, p * l)
+                else if (p != null && t != null && p > 0) liters = "%.2f".format(Locale.US, t / p)
             }, label = { Text("Precio por Litro (€/L)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
 
             OutlinedTextField(value = liters, onValueChange = {
                 liters = it.replace(",", ".")
-                val l = liters.toDoubleOrNull(); val p = pricePerLiter.toDoubleOrNull()
+                val l = liters.toDoubleOrNull(); val p = pricePerLiter.toDoubleOrNull(); val t = totalCost.toDoubleOrNull()
                 if (l != null && p != null) totalCost = "%.2f".format(Locale.US, p * l)
+                else if (l != null && t != null && l > 0) pricePerLiter = "%.3f".format(Locale.US, t / l)
             }, label = { Text("Cantidad (Litros)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
 
             OutlinedTextField(value = totalCost, onValueChange = {
                 totalCost = it.replace(",", ".")
-                val t = totalCost.toDoubleOrNull(); val l = liters.toDoubleOrNull()
+                val t = totalCost.toDoubleOrNull(); val l = liters.toDoubleOrNull(); val p = pricePerLiter.toDoubleOrNull()
                 if (t != null && l != null && l > 0) pricePerLiter = "%.3f".format(Locale.US, t / l)
+                else if (t != null && p != null && p > 0) liters = "%.2f".format(Locale.US, t / p)
             }, label = { Text("Coste Total (€)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
 
             Spacer(modifier = Modifier.weight(1f))
