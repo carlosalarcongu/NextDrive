@@ -32,7 +32,8 @@ fun ServiceIntervalsScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNav
         topBar = {
             TopAppBar(
                 title = { Text("PROGRAMACIONES", fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }
+                navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }, windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
+
             )
         }
     ) { paddingValues ->

@@ -30,7 +30,7 @@ fun AddTramiteScreen(vehicleId: Long, expenseId: Long? = null, viewModel: NextDr
         }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("TRÁMITES Y PAPELEO") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }) }) { paddingValues ->
+    Scaffold(topBar = { TopAppBar(title = { Text("TRÁMITES Y PAPELEO") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }, windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)) }) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).padding(16.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Nombre (Ej: ITV, Seguro, Impuesto)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = cost, onValueChange = { cost = it }, label = { Text("Coste (€)") }, modifier = Modifier.fillMaxWidth())

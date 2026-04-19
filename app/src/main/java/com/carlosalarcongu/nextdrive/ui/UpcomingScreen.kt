@@ -40,7 +40,7 @@ fun UpcomingScreen(viewModel: NextDriveViewModel, onAttend: (Long, String) -> Un
                 TopAppBar(
                     title = { Text("PRÓXIMOS", fontWeight = FontWeight.Bold) },
                     actions = { IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Ajustes") } },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background), windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
                 )
             }
         }

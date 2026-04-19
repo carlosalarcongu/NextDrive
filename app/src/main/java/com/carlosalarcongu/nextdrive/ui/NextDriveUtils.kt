@@ -1,6 +1,5 @@
 package com.carlosalarcongu.nextdrive.ui
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,23 +9,23 @@ import android.content.Intent
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
-import androidx.annotation.RequiresPermission
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.core.app.NotificationCompat
 import com.carlosalarcongu.nextdrive.MainActivity
 
+// 1. PREFERENCIAS GLOBALES (Modificado para el mapa)
 data class UserPrefs(
     val unitDist: String = "Kilómetros",
     val unitCurr: String = "Euros (€)",
     val unitVol: String = "Litros",
     val useVibration: Boolean = true,
-    val dashboardOrder: String = "INFO,DOCS,INTERVALS,EXPENSES" // NUEVO: Orden del panel
+    val dashboardOrder: String = "IMAGE,INFO_PARKING,DOCS,INTERVALS,EXPENSES",
+    val showFuelControls: Boolean = true // NUEVO: Mostrar controles del mapa
 )
 
 val LocalUserPrefs = staticCompositionLocalOf<UserPrefs> { error("Preferencias no proveídas") }
 
 // 2. FUNCIÓN DE VIBRACIÓN RESPONSIVA
-@RequiresPermission(Manifest.permission.VIBRATE)
 fun triggerVibration(context: Context, prefs: UserPrefs) {
     if (prefs.useVibration) {
         val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator

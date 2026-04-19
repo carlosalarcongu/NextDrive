@@ -99,7 +99,7 @@ fun AddExpenseScreen(vehicleId: Long, expenseId: Long? = null, defaultCategory: 
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(if (expenseId == null) "NUEVO REGISTRO" else "EDITAR REGISTRO") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }) }
+        topBar = { TopAppBar(title = { Text(if (expenseId == null) "NUEVO REGISTRO" else "EDITAR REGISTRO") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }, windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)) }
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 

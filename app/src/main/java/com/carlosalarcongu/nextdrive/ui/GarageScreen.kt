@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import com.carlosalarcongu.nextdrive.data.Vehicle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileInputStream
 
 fun getBrandLogoResId(context: Context, brand: String?): Int {
     if (brand.isNullOrBlank()) return 0
@@ -47,6 +49,7 @@ fun getBrandLogoResId(context: Context, brand: String?): Int {
     return resId
 }
 
+// ARREGLO IMÁGENES: Ahora lee archivos locales directamente saltándose bloqueos de seguridad
 @Composable
 fun VehicleImageLoader(vehicle: Vehicle, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -56,10 +59,17 @@ fun VehicleImageLoader(vehicle: Vehicle, modifier: Modifier = Modifier) {
         if (!vehicle.imageUri.isNullOrBlank()) {
             withContext(Dispatchers.IO) {
                 try {
-                    val inputStream = context.contentResolver.openInputStream(Uri.parse(vehicle.imageUri))
+                    val uri = Uri.parse(vehicle.imageUri)
+                    val inputStream = if (uri.scheme == "file") {
+                        FileInputStream(File(uri.path!!))
+                    } else {
+                        context.contentResolver.openInputStream(uri)
+                    }
                     bitmap = BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
                 } catch (e: Exception) { e.printStackTrace() }
             }
+        } else {
+            bitmap = null
         }
     }
 
@@ -80,12 +90,12 @@ fun GarageScreen(
     viewModel: NextDriveViewModel,
     onNavigateToAddVehicle: () -> Unit,
     onNavigateToEditVehicle: (Long) -> Unit,
-    onNavigateToAddRepostaje: (Long) -> Unit, // NUEVO
+    onNavigateToAddRepostaje: (Long) -> Unit,
     onVehicleClick: (Long) -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
     val context = LocalContext.current
-    val prefs = LocalUserPrefs.current // PREFERENCIAS GLOBALES
+    val prefs = LocalUserPrefs.current
     val distUnitLabel = if (prefs.unitDist == "Millas") "MI" else "KM"
 
     val vehicles by viewModel.allVehicles.collectAsState()
@@ -115,7 +125,8 @@ fun GarageScreen(
                                 selectedVehicleId = null
                             }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
                     )
                 } else {
                     TopAppBar(
@@ -124,7 +135,8 @@ fun GarageScreen(
                             IconButton(onClick = onNavigateToAddVehicle) { Icon(Icons.Default.Add, "Añadir") }
                             IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Ajustes") }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                        windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
                     )
                 }
             }
@@ -164,7 +176,6 @@ fun GarageScreen(
                             Box(modifier = Modifier.fillMaxWidth().height(160.dp).background(boxColor)) {
                                 VehicleImageLoader(vehicle = vehicle, modifier = Modifier.fillMaxSize().align(Alignment.Center))
 
-                                // NUEVO: BOTÓN RÁPIDO DE REPOSTAJE
                                 SmallFloatingActionButton(
                                     onClick = { onNavigateToAddRepostaje(vehicle.id) },
                                     modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),

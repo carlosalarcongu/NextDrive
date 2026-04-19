@@ -62,7 +62,7 @@ fun DocumentPanelScreen(vehicleId: Long, viewModel: NextDriveViewModel, onNaviga
                 title = { Text(if (currentFolderId == null) "DOCUMENTACIÓN" else allFolders.find{it.id == currentFolderId}?.name?.uppercase() ?: "CARPETA") },
                 navigationIcon = {
                     IconButton(onClick = { if (currentFolderId != null) currentFolderId = null else onNavigateBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") }
-                }
+                }, windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
             )
         },
         floatingActionButton = {

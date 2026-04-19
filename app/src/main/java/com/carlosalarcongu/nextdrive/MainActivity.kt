@@ -55,15 +55,14 @@ class MainActivity : ComponentActivity() {
             var unitCurr by remember { mutableStateOf(sharedPrefs.getString("unitCurr", "Euros (€)") ?: "Euros (€)") }
             var unitVol by remember { mutableStateOf(sharedPrefs.getString("unitVol", "Litros") ?: "Litros") }
             var dateFormat by remember { mutableStateOf(sharedPrefs.getString("dateFormat", "Sistema") ?: "Sistema") }
-
-            var dashboardOrder by remember { mutableStateOf(sharedPrefs.getString("dashboardOrder", "INFO,DOCS,INTERVALS,EXPENSES") ?: "INFO,DOCS,INTERVALS,EXPENSES") }
+            var dashboardOrder by remember { mutableStateOf(sharedPrefs.getString("dashboardOrder", "IMAGE,INFO_PARKING,DOCS,INTERVALS,EXPENSES") ?: "IMAGE,INFO_PARKING,DOCS,INTERVALS,EXPENSES") }
             var useVibration by remember { mutableStateOf(sharedPrefs.getBoolean("useVibration", true)) }
+            var showFuelControls by remember { mutableStateOf(sharedPrefs.getBoolean("showFuelControls", true)) } // NUEVO
 
-            // Construimos el objeto de preferencias globales
-            val userPrefs = UserPrefs(unitDist, unitCurr, unitVol, useVibration, dashboardOrder)
+            // PREFERENCIAS GLOBALES
+            val userPrefs = UserPrefs(unitDist, unitCurr, unitVol, useVibration, dashboardOrder, showFuelControls)
 
             NextDriveTheme(themeMode = themeMode, palette = colorPalette, fontSizeStr = fontSize) {
-                // INYECTAMOS LAS PREFERENCIAS A TODA LA APP
                 CompositionLocalProvider(LocalUserPrefs provides userPrefs) {
                     var backStack by remember { mutableStateOf(listOf<AppScreen>(AppScreen.Garage)) }
                     val currentScreen = backStack.last()
@@ -92,7 +91,7 @@ class MainActivity : ComponentActivity() {
                                     viewModel = viewModel,
                                     onNavigateToAddVehicle = { navigateTo(AppScreen.AddEditVehicle()) },
                                     onNavigateToEditVehicle = { id -> navigateTo(AppScreen.AddEditVehicle(id)) },
-                                    onNavigateToAddRepostaje = { id -> navigateTo(AppScreen.AddRepostaje(id)) }, // NUEVO: Repostaje rápido
+                                    onNavigateToAddRepostaje = { id -> navigateTo(AppScreen.AddRepostaje(id)) },
                                     onVehicleClick = { navigateTo(AppScreen.Dashboard(it)) },
                                     onNavigateToSettings = { navigateTo(AppScreen.Settings) }
                                 )
@@ -132,6 +131,10 @@ class MainActivity : ComponentActivity() {
                                     onToggleVibration = {
                                         useVibration = it
                                         sharedPrefs.edit().putBoolean("useVibration", it).apply()
+                                    },
+                                    onToggleFuelControls = {
+                                        showFuelControls = it
+                                        sharedPrefs.edit().putBoolean("showFuelControls", it).apply()
                                     },
                                     onNavigateToUserGuide = { navigateTo(AppScreen.UserGuide) },
                                     onNavigateBack = navigateBack

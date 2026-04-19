@@ -30,14 +30,15 @@ fun SettingsScreen(
     viewModel: NextDriveViewModel,
     themeMode: String, colorPalette: String, fontSize: String,
     unitDist: String, unitCurr: String, unitVol: String, dateFormat: String,
-    useVibration: Boolean, // NUEVO
+    useVibration: Boolean,
     onUpdatePref: (String, String) -> Unit,
-    onToggleVibration: (Boolean) -> Unit, // NUEVO
+    onToggleVibration: (Boolean) -> Unit,
+    onToggleFuelControls: (Boolean) -> Unit, // NUEVO
     onNavigateToUserGuide: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val prefs = LocalUserPrefs.current // Preferencias inyectadas para la vibración
+    val prefs = LocalUserPrefs.current
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showTrashDialog by remember { mutableStateOf(false) }
@@ -75,7 +76,8 @@ fun SettingsScreen(
             Surface(shadowElevation = 4.dp) {
                 TopAppBar(
                     title = { Text("AJUSTES", fontWeight = FontWeight.Bold) },
-                    navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }
+                    navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } },
+                    windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp) // ESTA ES LA LÍNEA QUE ARREGLA LA CABECERA GIGANTE
                 )
             }
         }
@@ -90,17 +92,25 @@ fun SettingsScreen(
             SettingsListItem("Política de Privacidad", "Consulta cómo tratamos (o no) tus datos") { showPrivacyDialog = true }
 
             SettingsSectionTitle("Tema y Apariencia", Icons.Default.ColorLens)
-            SettingsDropdown("Modo", listOf("SYSTEM", "DARK", "LIGHT", "OTRO (Próximamente)"), themeMode) { onUpdatePref("theme", it) }
+            SettingsDropdown("Modo", listOf("SYSTEM", "DARK", "LIGHT"), themeMode) { onUpdatePref("theme", it) }
             SettingsDropdown("Tamaño de Letra", listOf("PEQUEÑO", "MEDIANO", "GRANDE"), fontSize) { onUpdatePref("fontSize", it) }
             SettingsDropdown("Colores", listOf("VAMPIRIC", "FRUTAL", "MONOCROMÁTICO"), colorPalette) { onUpdatePref("palette", it) }
 
-            // NUEVO: TOGGLE DE VIBRACIÓN
+            // INTERRUPTORES DE EXPERIENCIA
             Row(modifier = Modifier.fillMaxWidth().clickable { onToggleVibration(!useVibration) }.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text("Vibraciones Responsivas", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                     Text("Vibrar al realizar acciones", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = useVibration, onCheckedChange = { onToggleVibration(it) })
+            }
+
+            Row(modifier = Modifier.fillMaxWidth().clickable { onToggleFuelControls(!prefs.showFuelControls) }.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Deslizador del Mapa", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                    Text("Ocultarlo para más espacio visual", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = prefs.showFuelControls, onCheckedChange = { onToggleFuelControls(it) })
             }
 
             SettingsSectionTitle("Unidades de Medida", Icons.Default.Straighten)
@@ -118,52 +128,14 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // ... (MANTÉN TUS DIÁLOGOS DE PAPELERA Y PRIVACIDAD EXACTAMENTE IGUAL AQUÍ ABAJO)
         if (showTrashDialog) {
-            AlertDialog(
-                onDismissRequest = { showTrashDialog = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false),
-                modifier = Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f),
-                title = { Text("Papelera de Reciclaje") },
-                text = {
-                    if (deletedVehicles.isEmpty() && deletedExpenses.isEmpty()) {
-                        Text("La papelera está vacía.")
-                    } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(deletedVehicles) { v ->
-                                Card {
-                                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                        Text("🚗 ${v.model}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                        IconButton(onClick = { viewModel.restoreVehicle(v); triggerVibration(context, prefs) }) { Icon(Icons.Default.Restore, "Restaurar", tint = MaterialTheme.colorScheme.primary) }
-                                        IconButton(onClick = { viewModel.hardDeleteVehicle(v); triggerVibration(context, prefs) }) { Icon(Icons.Default.DeleteForever, "Destruir", tint = MaterialTheme.colorScheme.error) }
-                                    }
-                                }
-                            }
-                            items(deletedExpenses) { e ->
-                                Card {
-                                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                        Text("🔧 ${e.title} (${e.totalCost}€)", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                        IconButton(onClick = { viewModel.restoreExpense(e); triggerVibration(context, prefs) }) { Icon(Icons.Default.Restore, "Restaurar", tint = MaterialTheme.colorScheme.primary) }
-                                        IconButton(onClick = { viewModel.hardDeleteExpense(e); triggerVibration(context, prefs) }) { Icon(Icons.Default.DeleteForever, "Destruir", tint = MaterialTheme.colorScheme.error) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = { TextButton(onClick = { showTrashDialog = false }) { Text("Cerrar") } },
-                dismissButton = {
-                    if (deletedVehicles.isNotEmpty() || deletedExpenses.isNotEmpty()) {
-                        TextButton(onClick = { viewModel.emptyTrash(); triggerVibration(context, prefs) }) { Text("Vaciar Todo", color = MaterialTheme.colorScheme.error) }
-                    }
-                }
-            )
+            AlertDialog(onDismissRequest = { showTrashDialog = false }, properties = DialogProperties(usePlatformDefaultWidth = false), modifier = Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f), title = { Text("Papelera de Reciclaje") }, text = { if (deletedVehicles.isEmpty() && deletedExpenses.isEmpty()) { Text("La papelera está vacía.") } else { LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) { items(deletedVehicles) { v -> Card { Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("🚗 ${v.model}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); IconButton(onClick = { viewModel.restoreVehicle(v); triggerVibration(context, prefs) }) { Icon(Icons.Default.Restore, "Restaurar", tint = MaterialTheme.colorScheme.primary) }; IconButton(onClick = { viewModel.hardDeleteVehicle(v); triggerVibration(context, prefs) }) { Icon(Icons.Default.DeleteForever, "Destruir", tint = MaterialTheme.colorScheme.error) } } } }; items(deletedExpenses) { e -> Card { Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("🔧 ${e.title} (${e.totalCost}€)", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); IconButton(onClick = { viewModel.restoreExpense(e); triggerVibration(context, prefs) }) { Icon(Icons.Default.Restore, "Restaurar", tint = MaterialTheme.colorScheme.primary) }; IconButton(onClick = { viewModel.hardDeleteExpense(e); triggerVibration(context, prefs) }) { Icon(Icons.Default.DeleteForever, "Destruir", tint = MaterialTheme.colorScheme.error) } } } } } } }, confirmButton = { TextButton(onClick = { showTrashDialog = false }) { Text("Cerrar") } }, dismissButton = { if (deletedVehicles.isNotEmpty() || deletedExpenses.isNotEmpty()) { TextButton(onClick = { viewModel.emptyTrash(); triggerVibration(context, prefs) }) { Text("Vaciar Todo", color = MaterialTheme.colorScheme.error) } } })
         }
         if (showPrivacyDialog) { AlertDialog(onDismissRequest = { showPrivacyDialog = false }, title = { Text("Política de Privacidad") }, text = { Text("NextDrive es una aplicación de gestión local...") }, confirmButton = { TextButton(onClick = { showPrivacyDialog = false }) { Text("Entendido") } }) }
         if (showDeleteDialog) { AlertDialog(onDismissRequest = { showDeleteDialog = false }, title = { Text("¿BORRAR TODO?") }, text = { Text("Se eliminará todo tu garaje y gastos de forma irreversible.") }, confirmButton = { Button(onClick = { viewModel.deleteAllData(); showDeleteDialog = false; triggerVibration(context, prefs) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("BORRAR") } }, dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancelar") } }) }
     }
 }
-
+//... (Conservas SettingsSectionTitle y los demás elementos visuales igual)
 @Composable
 fun SettingsSectionTitle(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) { Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp)) { Icon(icon, "", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)); Spacer(modifier = Modifier.width(8.dp)); Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }; HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
 @Composable

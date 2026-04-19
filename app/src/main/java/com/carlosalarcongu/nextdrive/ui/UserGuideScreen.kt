@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun UserGuideScreen(onNavigateBack: () -> Unit) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("GUÍA DE USUARIO") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver") } }) }
+        topBar = { TopAppBar(title = { Text("GUÍA DE USUARIO") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver") } }, windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)) }
     ) { padding ->
         LazyColumn(modifier = Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 

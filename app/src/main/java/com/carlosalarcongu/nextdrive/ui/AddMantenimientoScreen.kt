@@ -138,7 +138,7 @@ fun AddMantenimientoScreen(vehicleId: Long, expenseId: Long? = null, initialCate
                             onNavigateBack()
                         }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
                     }
-                }
+                }, windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
             )
         }
     ) { paddingValues ->

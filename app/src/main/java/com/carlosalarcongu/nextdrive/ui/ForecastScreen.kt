@@ -44,7 +44,7 @@ fun ForecastScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background), windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
             )
         }
     ) { paddingValues ->

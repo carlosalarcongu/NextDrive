@@ -1,8 +1,10 @@
 package com.carlosalarcongu.nextdrive.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,8 +34,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.carlosalarcongu.nextdrive.data.Vehicle
+import java.io.File
+import java.io.FileOutputStream
 
-// ... (Conserva tu val carDatabaseMock y val vehicleColors exactamente igual aquí arriba) ...
+// ... (Conserva val carDatabaseMock y val vehicleColors exactamente igual aquí arriba)
 val carDatabaseMock = mapOf(
     "Abarth" to listOf("595", "695"),
     "Alfa Romeo" to listOf("Giulia", "Stelvio", "Tonale"),
@@ -86,7 +90,7 @@ val vehicleColors = listOf(
 @Composable
 fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
-    val prefs = LocalUserPrefs.current // PREFERENCIAS INYECTADAS
+    val prefs = LocalUserPrefs.current
     val vehicleToEdit by if (vehicleId != null) viewModel.getVehicleById(vehicleId).collectAsState(null) else remember { mutableStateOf(null) }
     var isInitialized by remember { mutableStateOf(false) }
 
@@ -109,13 +113,29 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
     var isDailyUse by remember { mutableStateOf(true) }
     var isSecondHand by remember { mutableStateOf(true) }
     var selectedColorHex by remember { mutableStateOf<String?>(null) }
+
+    // Ruta de la imagen cargada (Uri o File path)
     var customImageUri by remember { mutableStateOf<String?>(null) }
 
-    // NUEVO: LAUNCHER DE IMÁGENES
-    val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let {
-            context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            customImageUri = it.toString()
+    // MODIFICADO: LAUNCHER ESPECÍFICO PARA GALERÍA DE FOTOS (PickVisualMedia)
+    val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { selectedUri ->
+            // COPIAR IMAGEN A CARPETA INTERNA PARA PERSISTENCIA
+            val timestamp = System.currentTimeMillis()
+            val internalFile = File(context.filesDir, "vehicle_image_$timestamp.jpg")
+
+            try {
+                context.contentResolver.openInputStream(selectedUri)?.use { inputStream ->
+                    FileOutputStream(internalFile).use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+                // Guardamos la ruta del archivo interno
+                customImageUri = Uri.fromFile(internalFile).toString()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Error al procesar la imagen", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -145,18 +165,22 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
     val filteredModels = availableModels.filter { it.contains(model, ignoreCase = true) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(if (vehicleId == null) "AÑADIR VEHÍCULO" else "EDITAR VEHÍCULO", fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }) }
+        topBar = { TopAppBar(title = { Text(if (vehicleId == null) "AÑADIR VEHÍCULO" else "EDITAR VEHÍCULO", fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } }, windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)) }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
 
             // FOTO PERSONALIZADA
             Card(
-                modifier = Modifier.fillMaxWidth().height(160.dp).clickable { imageLauncher.launch(arrayOf("image/*")) },
+                // MODIFICADO: LANZAR SELECTOR DE GALERÍA (ImageOnly)
+                modifier = Modifier.fillMaxWidth().height(160.dp).clickable {
+                    imageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (customImageUri != null) {
+                        // Usamos el model vacio para que compile si es una previsualización
                         VehicleImageLoader(vehicle = Vehicle(model = "", imageUri = customImageUri), modifier = Modifier.fillMaxSize())
                         Box(modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), CircleShape).padding(8.dp)) {
                             Icon(Icons.Default.Edit, "Cambiar Foto", modifier = Modifier.size(20.dp))
@@ -165,14 +189,13 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.AddAPhoto, contentDescription = "Añadir Foto", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Añadir Foto Personalizada", style = MaterialTheme.typography.labelMedium)
+                            Text("Añadir Foto desde Galería", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
             }
 
-            // SELECTOR DE COLOR (Opcional si hay foto, pero útil de fondo)
-            Text("Color (Para fondo/logo genérico):", style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.Start))
+            Text("O selecciona un color (si no hay foto):", style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.Start))
             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 vehicleColors.forEach { hex ->
                     Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(hex))).clickable { selectedColorHex = hex }, contentAlignment = Alignment.Center) {
@@ -227,7 +250,7 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
                 OutlinedTextField(
                     value = currentKm,
                     onValueChange = { currentKm = it.filter { char -> char.isDigit() } },
-                    label = { Text("Odómetro (${prefs.unitDist})") }, // UNIDADES DINÁMICAS
+                    label = { Text("Odómetro (${prefs.unitDist.take(2).uppercase()})") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
                 )
@@ -244,7 +267,7 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
             OutlinedTextField(
                 value = acquisitionCost,
                 onValueChange = { acquisitionCost = it.filter { char -> char.isDigit() || char == '.' } },
-                label = { Text("Coste de Adquisición (${prefs.unitCurr})") }, // UNIDADES DINÁMICAS
+                label = { Text("Coste de Adquisición (${prefs.unitCurr.take(1)})") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -265,7 +288,7 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
                 AlertDialog(
                     onDismissRequest = { showCustomFuelDialog = false },
                     title = { Text("Otro Combustible") },
-                    text = { OutlinedTextField(value = customFuelText, onValueChange = { customFuelText = it }, label = { Text("Especificar") }) },
+                    text = { OutlinedTextField(value = customFuelText, onValueChange = { customFuelText = it }, label = { Text("Especificar combustible") }) },
                     confirmButton = { TextButton(onClick = { if (customFuelText.isNotBlank()) fuelType = customFuelText; showCustomFuelDialog = false }) { Text("Aceptar") } },
                     dismissButton = { TextButton(onClick = { showCustomFuelDialog = false }) { Text("Cancelar") } }
                 )
@@ -304,10 +327,10 @@ fun AddVehicleScreen(vehicleId: Long? = null, viewModel: NextDriveViewModel, onN
                         isDailyUse = isDailyUse,
                         isSecondHand = isSecondHand,
                         colorHex = selectedColorHex,
-                        imageUri = customImageUri // GUARDAR IMAGEN
+                        imageUri = customImageUri
                     )
                     if (vehicleId == null) viewModel.addVehicle(vehicle) else viewModel.updateVehicle(vehicle)
-                    triggerVibration(context, prefs) // VIBRACIÓN RESPONSIVA
+                    triggerVibration(context, prefs)
                     onNavigateBack()
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),

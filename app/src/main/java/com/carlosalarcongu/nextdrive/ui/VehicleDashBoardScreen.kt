@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -35,11 +36,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.carlosalarcongu.nextdrive.data.Vehicle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-enum class DashboardModule { INFO_PARKING, DOCS, INTERVALS, EXPENSES }
+// NUEVO MÓDULO AÑADIDO: IMAGE
+enum class DashboardModule { IMAGE, INFO_PARKING, DOCS, INTERVALS, EXPENSES }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -48,7 +51,7 @@ fun VehicleDashboardScreen(
     onNavigateToEdit: (Long) -> Unit, onNavigateToDocuments: (Long) -> Unit,
     onNavigateToAdd: (Long, String) -> Unit, onNavigateToEditExpense: (Long, String, Long) -> Unit,
     onNavigateToSettingsIntervals: (Long) -> Unit,
-    onUpdateDashboardOrder: (String) -> Unit // NUEVO: Callback de orden
+    onUpdateDashboardOrder: (String) -> Unit
 ) {
     val context = LocalContext.current
     val prefs = LocalUserPrefs.current
@@ -59,12 +62,15 @@ fun VehicleDashboardScreen(
     var isFabExpanded by remember { mutableStateOf(false) }
     var selectedExpenseIds by remember { mutableStateOf(setOf<Long>()) }
 
-    // ESTADO: Modularidad
     var isEditingLayout by remember { mutableStateOf(false) }
+
+    // CARGA DE ORDEN CON PROTECCIÓN (Inyecta IMAGE si faltaba en una sesión antigua)
     var moduleOrder by remember {
         mutableStateOf(
             prefs.dashboardOrder.split(",").mapNotNull {
                 try { DashboardModule.valueOf(it) } catch(e: Exception) { null }
+            }.toMutableList().apply {
+                if (!contains(DashboardModule.IMAGE)) add(0, DashboardModule.IMAGE)
             }.ifEmpty { DashboardModule.values().toList() }
         )
     }
@@ -74,13 +80,13 @@ fun VehicleDashboardScreen(
 
     val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
     val alarmManager = remember { context.getSystemService(Context.ALARM_SERVICE) as AlarmManager }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) showParkingDialog = true else Toast.makeText(context, "Permiso denegado", Toast.LENGTH_SHORT).show()
+        if (granted) showParkingDialog = true else Toast.makeText(context, "Permiso GPS denegado", Toast.LENGTH_SHORT).show()
     }
 
     if (vehicle == null) return
 
-    // FUNCIÓN PARA MOVER MÓDULOS
     fun moveModule(index: Int, direction: Int) {
         val newOrder = moduleOrder.toMutableList()
         val item = newOrder.removeAt(index)
@@ -92,34 +98,36 @@ fun VehicleDashboardScreen(
 
     Scaffold(
         topBar = {
-            if (selectedExpenseIds.isNotEmpty()) {
-                TopAppBar(
-                    title = { Text("${selectedExpenseIds.size} seleccionados") },
-                    navigationIcon = { IconButton(onClick = { selectedExpenseIds = emptySet() }) { Icon(Icons.Default.Close, "Cancelar") } },
-                    actions = {
-                        IconButton(onClick = {
-                            viewModel.softDeleteMultipleExpenses(selectedExpenseIds.toList())
-                            triggerVibration(context, prefs)
-                            selectedExpenseIds = emptySet()
-                        }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                )
-            } else if (isEditingLayout) {
-                TopAppBar(
-                    title = { Text("ORGANIZAR PANEL") },
-                    navigationIcon = { IconButton(onClick = { isEditingLayout = false; triggerVibration(context, prefs) }) { Icon(Icons.Default.Check, "Guardar") } },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                )
-            } else {
-                TopAppBar(
-                    title = { Text(vehicle?.model?.uppercase() ?: "") },
-                    navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } },
-                    actions = {
-                        IconButton(onClick = { isEditingLayout = true; triggerVibration(context, prefs) }) { Icon(Icons.Default.DashboardCustomize, "Editar Panel") }
-                        IconButton(onClick = { onNavigateToEdit(vehicleId) }) { Icon(Icons.Default.Edit, "Editar Coche") }
-                    }
-                )
+            Surface(shadowElevation = 4.dp) {
+                if (selectedExpenseIds.isNotEmpty()) {
+                    TopAppBar(
+                        title = { Text("${selectedExpenseIds.size} seleccionados") },
+                        navigationIcon = { IconButton(onClick = { selectedExpenseIds = emptySet() }) { Icon(Icons.Default.Close, "Cancelar") } },
+                        actions = {
+                            IconButton(onClick = {
+                                viewModel.softDeleteMultipleExpenses(selectedExpenseIds.toList())
+                                triggerVibration(context, prefs)
+                                selectedExpenseIds = emptySet()
+                            }) { Icon(Icons.Default.Delete, "Borrar", tint = MaterialTheme.colorScheme.error) }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
+                    )
+                } else if (isEditingLayout) {
+                    TopAppBar(
+                        title = { Text("ORGANIZAR PANEL") },
+                        navigationIcon = { IconButton(onClick = { isEditingLayout = false; triggerVibration(context, prefs) }) { Icon(Icons.Default.Check, "Guardar") } },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer), windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
+                    )
+                } else {
+                    TopAppBar(
+                        title = { Text(vehicle?.model?.uppercase() ?: "") },
+                        navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "") } },
+                        actions = {
+                            IconButton(onClick = { isEditingLayout = true; triggerVibration(context, prefs) }) { Icon(Icons.Default.DashboardCustomize, "Organizar") }
+                            IconButton(onClick = { onNavigateToEdit(vehicleId) }) { Icon(Icons.Default.Edit, "Editar Coche") }
+                        }
+                    )
+                }
             }
         },
         floatingActionButton = {
@@ -145,6 +153,7 @@ fun VehicleDashboardScreen(
                 item { Text("Usa las flechas para reordenar las secciones de tu panel.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 itemsIndexed(moduleOrder) { index, module ->
                     val moduleName = when(module) {
+                        DashboardModule.IMAGE -> "Imagen del Vehículo"
                         DashboardModule.INFO_PARKING -> "Información y Aparcamiento"
                         DashboardModule.DOCS -> "Documentos"
                         DashboardModule.INTERVALS -> "Programaciones"
@@ -161,11 +170,31 @@ fun VehicleDashboardScreen(
                     }
                 }
             } else {
-                // RENDERIZADO DINÁMICO SEGÚN EL ORDEN
                 moduleOrder.forEach { module ->
                     when (module) {
+                        DashboardModule.IMAGE -> {
+                            item {
+                                // TARJETA EXCLUSIVA DE IMAGEN
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().height(200.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    val defaultBg = MaterialTheme.colorScheme.background
+                                    val boxColor = remember(vehicle?.colorHex, defaultBg) {
+                                        try {
+                                            if (!vehicle?.colorHex.isNullOrBlank()) Color(android.graphics.Color.parseColor(vehicle?.colorHex)) else defaultBg
+                                        } catch (e: Exception) { defaultBg }
+                                    }
+                                    Box(modifier = Modifier.fillMaxSize().background(boxColor)) {
+                                        VehicleImageLoader(vehicle = vehicle!!, modifier = Modifier.fillMaxSize().align(Alignment.Center))
+                                    }
+                                }
+                            }
+                        }
                         DashboardModule.INFO_PARKING -> {
                             item {
+                                // TARJETA LIMPIA DE INFORMACIÓN Y APARCAMIENTO
                                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                     Column(modifier = Modifier.padding(16.dp)) {
                                         val displayName = vehicle?.nickname?.takeIf { it.isNotBlank() } ?: "${vehicle?.brand ?: ""} ${vehicle?.model}"
@@ -175,6 +204,7 @@ fun VehicleDashboardScreen(
 
                                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
+                                        // SECCIÓN DE APARCAMIENTO
                                         if (vehicle?.parkingLat != null && vehicle?.parkingLon != null) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
@@ -335,6 +365,7 @@ fun VehicleDashboardScreen(
     }
 }
 
+// Mantenemos FabMenuItem, getCategoryColor y DashboardIconMap IGUALES al final
 @Composable
 private fun FabMenuItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {

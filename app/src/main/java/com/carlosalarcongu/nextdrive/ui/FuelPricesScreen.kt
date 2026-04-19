@@ -1,7 +1,6 @@
 package com.carlosalarcongu.nextdrive.ui
 
 import android.Manifest
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -20,7 +19,6 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -34,8 +32,8 @@ import androidx.compose.material.icons.filled.ElectricalServices
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,15 +62,6 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 
-// --- MODELO Y FUNCIONES VISUALES ---
-
-data class GasStationData(
-    val name: String, val brand: String,
-    val lat: Double, val lon: Double,
-    val price95: Double, val price98: Double, val priceDiesel: Double, val priceElectric: Double,
-    val distanceMeters: Float
-)
-
 fun getBrandColor(brand: String): Color {
     val upper = brand.uppercase()
     return when {
@@ -83,14 +72,14 @@ fun getBrandColor(brand: String): Color {
         upper.contains("GALP") -> Color(0xFFFF9800)
         upper.contains("SHELL") -> Color(0xFFFFC107)
         upper.contains("BP") -> Color(0xFF4CAF50)
-        upper.contains("ENDESA") || upper.contains("IBERDROLA") || upper.contains("TESLA") -> Color(0xFF00BCD4) // Eléctricas
+        upper.contains("ENDESA") || upper.contains("IBERDROLA") || upper.contains("TESLA") -> Color(0xFF00BCD4)
         else -> Color.LightGray
     }
 }
 
 fun getPriceColor(price: Double, isElectric: Boolean = false): Color {
     if (price <= 0.0) return Color.Gray
-    if (isElectric) return Color(0xFF00BCD4) // Cyan para eléctrico
+    if (isElectric) return Color(0xFF00BCD4)
 
     val minPrice = 1.20
     val maxPrice = 1.80
@@ -138,6 +127,13 @@ fun createPriceMarkerDrawable(context: Context, priceText: String, priceValue: D
     return BitmapDrawable(context.resources, bitmap)
 }
 
+data class GasStationData(
+    val name: String, val brand: String,
+    val lat: Double, val lon: Double,
+    val price95: Double, val price98: Double, val priceDiesel: Double, val priceElectric: Double,
+    val distanceMeters: Float
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
@@ -149,11 +145,14 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
     var stations by remember { mutableStateOf<List<GasStationData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
+    // NUEVO: Control de radio y refresco manual
+    var searchRadiusKm by remember { mutableStateOf(15f) }
+    var refreshTrigger by remember { mutableStateOf(0) }
+
     var userLocation by remember { mutableStateOf<Location?>(null) }
     var hasLocationPermission by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
 
     val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
-    val locationListener = remember { LocationListener { location -> userLocation = location } }
 
     val permisoGPSLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { concedido ->
         hasLocationPermission = concedido
@@ -164,19 +163,33 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
         if (!hasLocationPermission) permisoGPSLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
-    DisposableEffect(hasLocationPermission) {
+    // OBTENCIÓN ÚNICA DE UBICACIÓN
+    DisposableEffect(hasLocationPermission, refreshTrigger) {
         if (hasLocationPermission) {
+            val locationListener = object : LocationListener {
+                override fun onLocationChanged(location: Location) {
+                    userLocation = location
+                    try { locationManager.removeUpdates(this) } catch(e: Exception){} // Apaga el GPS al atrapar la primera
+                }
+            }
             try {
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000L, 10f, locationListener)
-                userLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER) ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-            } catch (e: SecurityException) {}
+                val loc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER) ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                if (loc != null) userLocation = loc
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 1f, locationListener)
+                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000L, 1f, locationListener)
+            } catch(e: SecurityException) {}
+
+            onDispose { try { locationManager.removeUpdates(locationListener) } catch(e: Exception){} }
+        } else {
+            onDispose {}
         }
-        onDispose { locationManager.removeUpdates(locationListener) }
     }
 
-    LaunchedEffect(userLocation) {
-        val refLat = userLocation?.latitude ?: 43.4623
-        val refLon = userLocation?.longitude ?: -3.8100
+    LaunchedEffect(userLocation, refreshTrigger) {
+        if (userLocation == null) return@LaunchedEffect // Espera hasta tener GPS
+
+        val refLat = userLocation!!.latitude
+        val refLon = userLocation!!.longitude
 
         withContext(Dispatchers.IO) {
             try {
@@ -187,7 +200,7 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
                 val cachedJson = sharedPrefs.getString("json", "")
 
                 val jsonString = if (cachedDate == today && !cachedJson.isNullOrEmpty()) {
-                    cachedJson // Carga instantánea desde memoria
+                    cachedJson
                 } else {
                     val url = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/"
                     val freshJson = URL(url).readText()
@@ -206,9 +219,11 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
                     val lat = item.getString("Latitud").replace(",", ".").toDoubleOrNull() ?: continue
                     val lon = item.getString("Longitud (WGS84)").replace(",", ".").toDoubleOrNull() ?: continue
 
-                    if (abs(lat - refLat) > 0.5 || abs(lon - refLon) > 0.5) continue
+                    // Filtro crudo a 60km (0.6 grados aprox). El radio final lo elige el usuario.
+                    if (abs(lat - refLat) > 0.6 || abs(lon - refLon) > 0.6) continue
                     Location.distanceBetween(refLat, refLon, lat, lon, results)
-                    if (results[0] <= 15000f) {
+
+                    if (results[0] <= 60000f) {
                         fetchedStations.add(GasStationData(
                             name = item.getString("Rótulo"), brand = item.getString("Rótulo"),
                             lat = lat, lon = lon,
@@ -220,7 +235,7 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
                     }
                 }
 
-                // MOCKS DE ELECTROLINERAS
+                // MOCKS
                 fetchedStations.add(GasStationData("Supercharger Tesla", "Tesla", 43.424, -3.829, 0.0, 0.0, 0.0, 0.45, 1200f))
                 fetchedStations.add(GasStationData("Iberdrola Carga Rápida", "Iberdrola", 43.455, -3.830, 0.0, 0.0, 0.0, 0.35, 2500f))
 
@@ -229,12 +244,14 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
         }
     }
 
-    val sortedList = remember(sortBy, stations) {
+    // FILTRADO INSTANTÁNEO POR RADIO Y TIPO
+    val visibleStations = remember(sortBy, searchRadiusKm, stations) {
+        val withinRadius = stations.filter { it.distanceMeters <= searchRadiusKm * 1000f }
         val filtered = when (sortBy) {
-            "Eléctrico" -> stations.filter { it.priceElectric > 0.0 }
-            "Gasolina 98" -> stations.filter { it.price98 > 0.0 }
-            "Diésel" -> stations.filter { it.priceDiesel > 0.0 }
-            else -> stations.filter { it.price95 > 0.0 }
+            "Eléctrico" -> withinRadius.filter { it.priceElectric > 0.0 }
+            "Gasolina 98" -> withinRadius.filter { it.price98 > 0.0 }
+            "Diésel" -> withinRadius.filter { it.priceDiesel > 0.0 }
+            else -> withinRadius.filter { it.price95 > 0.0 }
         }
         filtered.sortedBy { when(sortBy) { "Eléctrico"->it.priceElectric; "Gasolina 98"->it.price98; "Diésel"->it.priceDiesel; else->it.price95 } }
     }
@@ -244,24 +261,60 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
             Surface(shadowElevation = 4.dp) {
                 TopAppBar(
                     title = { Text("ESTACIONES CERCANAS", fontWeight = FontWeight.Bold) },
-                    actions = { IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Ajustes") } },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                    actions = {
+                        IconButton(onClick = {
+                            context.getSharedPreferences("FuelCache", Context.MODE_PRIVATE).edit().clear().apply()
+                            isLoading = true
+                            userLocation = null
+                            refreshTrigger++
+                        }) { Icon(Icons.Default.Refresh, "Refrescar") }
+                        IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Ajustes") }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                    windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp) // CABECERA ESTRECHA
                 )
             }
         }
     ) { paddingValues ->
+        val prefs = LocalUserPrefs.current // Pillamos preferencias para saber si ocultar controles
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             TabRow(selectedTabIndex = if (viewMode == "LISTA") 0 else 1) {
                 Tab(selected = viewMode == "LISTA", onClick = { viewMode = "LISTA" }, text = { Text("LISTADO", fontWeight = FontWeight.Bold) }, icon = { Icon(Icons.Default.FormatListBulleted, "") })
                 Tab(selected = viewMode == "MAPA", onClick = { viewMode = "MAPA" }, text = { Text("MAPA", fontWeight = FontWeight.Bold) }, icon = { Icon(Icons.Default.Map, "") })
             }
 
+            // CONTROLES DE RADIO: Ahora súper finos y ocultables
+            if (prefs.showFuelControls) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Radio: ${searchRadiusKm.toInt()} km", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Slider(
+                            value = searchRadiusKm,
+                            onValueChange = { searchRadiusKm = it },
+                            valueRange = 5f..60f,
+                            steps = 10,
+                            modifier = Modifier.weight(1f).height(24.dp)
+                        )
+                    }
+                }
+            }
+
             Box(modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                // ... (Todo el mapa y listado idéntico) ...
                 if (isLoading) {
+                    // AQUÍ ESTÁ EL NUEVO VELOCÍMETRO
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { SpeedometerLoader() }
                 } else if (viewMode == "LISTA") {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(selected = sortBy == "Gasolina 95", onClick = { sortBy = "Gasolina 95" }, label = { Text("95") })
                                 FilterChip(selected = sortBy == "Diésel", onClick = { sortBy = "Diésel" }, label = { Text("Diésel") })
@@ -269,7 +322,7 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
                             }
                         }
                         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(sortedList) { station -> GasStationCard(station, sortBy) }
+                            items(visibleStations) { station -> GasStationCard(station, sortBy) }
                         }
                     }
                 } else {
@@ -292,7 +345,7 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
                                 map.controller.setCenter(centerPoint)
                                 if (userLocation != null) map.overlays.add(Marker(map).apply { position = centerPoint; icon = ContextCompat.getDrawable(context, android.R.drawable.ic_menu_mylocation); setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER) })
 
-                                stations.forEach { station ->
+                                visibleStations.forEach { station ->
                                     val currentPrice = when(mapFuelType) { "Diésel" -> station.priceDiesel; "Eléctrico" -> station.priceElectric; else -> station.price95 }
                                     if (currentPrice > 0.0) {
                                         map.overlays.add(Marker(map).apply {
@@ -302,8 +355,9 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
                                             icon = createPriceMarkerDrawable(context, priceText, currentPrice, getBrandColor(station.brand), mapFuelType == "Eléctrico")
                                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                                             setOnMarkerClickListener { _, _ ->
-                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=${station.lat},${station.lon}")).apply { setPackage("com.google.android.apps.maps") }
-                                                try { context.startActivity(intent) } catch (e: Exception) { }
+                                                val uriStr = "geo:0,0?q=${station.lat},${station.lon}(${Uri.encode(station.name)})"
+                                                val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply { setPackage("com.google.android.apps.maps") }
+                                                try { context.startActivity(mapIntent) } catch (e: Exception) {}
                                                 true
                                             }
                                         })
@@ -315,9 +369,9 @@ fun FuelPricesScreen(onNavigateToSettings: () -> Unit) {
                         )
                         Surface(modifier = Modifier.align(Alignment.TopCenter).padding(16.dp), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)) {
                             Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilterChip(selected = mapFuelType == "Gasolina 95", onClick = { mapFuelType = "Gasolina 95" }, label = { Text("95") })
-                                FilterChip(selected = mapFuelType == "Diésel", onClick = { mapFuelType = "Diésel" }, label = { Text("Diésel") })
-                                FilterChip(selected = mapFuelType == "Eléctrico", onClick = { mapFuelType = "Eléctrico" }, label = { Text("Eléctrico", color = if (mapFuelType == "Eléctrico") Color(0xFF00BCD4) else Color.Unspecified) })
+                                FilterChip(selected = mapFuelType == "Gasolina 95", onClick = { mapFuelType = "Gasolina 95"; sortBy = "Gasolina 95" }, label = { Text("95") })
+                                FilterChip(selected = mapFuelType == "Diésel", onClick = { mapFuelType = "Diésel"; sortBy = "Diésel" }, label = { Text("Diésel") })
+                                FilterChip(selected = mapFuelType == "Eléctrico", onClick = { mapFuelType = "Eléctrico"; sortBy = "Eléctrico" }, label = { Text("Eléctrico", color = if (mapFuelType == "Eléctrico") Color(0xFF00BCD4) else Color.Unspecified) })
                             }
                         }
                     }
@@ -347,7 +401,6 @@ fun GasStationCard(station: GasStationData, highlightedSort: String) {
                 }
                 IconButton(
                     onClick = {
-                        // NUEVO INTENT: Muestra la chincheta con el nombre en Maps en lugar de arrancar navegación
                         val uriStr = "geo:0,0?q=${station.lat},${station.lon}(${Uri.encode(station.name)})"
                         val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr)).apply { setPackage("com.google.android.apps.maps") }
                         try { context.startActivity(mapIntent) } catch (e: Exception) {}
